@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,9 @@
 
 package org.springframework.boot.context;
 
-import org.junit.Assume;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import org.springframework.boot.DefaultBootstrapContext;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources;
@@ -26,36 +26,39 @@ import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.test.context.support.TestPropertySourceUtils;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+
 /**
  * Tests for {@link FileEncodingApplicationListener}.
  *
  * @author Dave Syer
  */
-public class FileEncodingApplicationListenerTests {
+class FileEncodingApplicationListenerTests {
 
 	private final FileEncodingApplicationListener initializer = new FileEncodingApplicationListener();
 
 	private final ConfigurableEnvironment environment = new StandardEnvironment();
 
 	private final ApplicationEnvironmentPreparedEvent event = new ApplicationEnvironmentPreparedEvent(
-			new SpringApplication(), new String[0], this.environment);
+			new DefaultBootstrapContext(), new SpringApplication(), new String[0], this.environment);
 
-	@Test(expected = IllegalStateException.class)
-	public void testIllegalState() {
+	@Test
+	void testIllegalState() {
 		TestPropertySourceUtils.addInlinedPropertiesToEnvironment(this.environment,
 				"spring.mandatory_file_encoding=FOO");
 		ConfigurationPropertySources.attach(this.environment);
+		assertThatIllegalStateException().isThrownBy(() -> this.initializer.onApplicationEvent(this.event));
+	}
+
+	@Test
+	void testSunnyDayNothingMandated() {
 		this.initializer.onApplicationEvent(this.event);
 	}
 
 	@Test
-	public void testSunnyDayNothingMandated() {
-		this.initializer.onApplicationEvent(this.event);
-	}
-
-	@Test
-	public void testSunnyDayMandated() {
-		Assume.assumeNotNull(System.getProperty("file.encoding"));
+	void testSunnyDayMandated() {
+		assertThat(System.getProperty("file.encoding")).isNotNull();
 		TestPropertySourceUtils.addInlinedPropertiesToEnvironment(this.environment,
 				"spring.mandatory_file_encoding:" + System.getProperty("file.encoding"));
 		ConfigurationPropertySources.attach(this.environment);

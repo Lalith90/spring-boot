@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,10 +30,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.autoconfigure.OverrideAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.core.AutoConfigureCache;
 import org.springframework.boot.test.autoconfigure.filter.TypeExcludeFilters;
-import org.springframework.boot.test.context.SpringBootTestContextBootstrapper;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.core.annotation.AliasFor;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import org.springframework.test.context.BootstrapWith;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
@@ -41,9 +41,8 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Annotation that can be used in combination with {@code @RunWith(SpringRunner.class)}
- * for a typical Spring rest client test. Can be used when a test focuses
- * <strong>only</strong> on beans that use {@link RestTemplateBuilder}.
+ * Annotation for a Spring rest client test that focuses <strong>only</strong> on beans
+ * that use {@link RestTemplateBuilder}.
  * <p>
  * Using this annotation will disable full auto-configuration and instead apply only
  * configuration relevant to rest client tests (i.e. Jackson or GSON auto-configuration
@@ -57,24 +56,36 @@ import org.springframework.web.client.RestTemplate;
  * If you are testing a bean that doesn't use {@link RestTemplateBuilder} but instead
  * injects a {@link RestTemplate} directly, you can add
  * {@code @AutoConfigureWebClient(registerRestTemplate=true)}.
+ * <p>
+ * When using JUnit 4, this annotation should be used in combination with
+ * {@code @RunWith(SpringRunner.class)}.
  *
  * @author Stephane Nicoll
  * @author Phillip Webb
+ * @author Artsiom Yudovin
  * @since 1.4.0
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Inherited
-@BootstrapWith(SpringBootTestContextBootstrapper.class)
+@BootstrapWith(RestClientTestContextBootstrapper.class)
 @ExtendWith(SpringExtension.class)
 @OverrideAutoConfiguration(enabled = false)
-@TypeExcludeFilters(RestClientExcludeFilter.class)
+@TypeExcludeFilters(RestClientTypeExcludeFilter.class)
 @AutoConfigureCache
 @AutoConfigureWebClient
 @AutoConfigureMockRestServiceServer
 @ImportAutoConfiguration
 public @interface RestClientTest {
+
+	/**
+	 * Properties in form {@literal key=value} that should be added to the Spring
+	 * {@link Environment} before the test runs.
+	 * @return the properties to add
+	 * @since 2.1.0
+	 */
+	String[] properties() default {};
 
 	/**
 	 * Specifies the components to test. This is an alias of {@link #components()} which

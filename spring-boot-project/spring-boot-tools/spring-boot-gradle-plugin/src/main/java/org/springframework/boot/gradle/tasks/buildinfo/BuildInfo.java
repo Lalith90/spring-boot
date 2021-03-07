@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,8 +24,9 @@ import java.util.Map;
 import org.gradle.api.Action;
 import org.gradle.api.Project;
 import org.gradle.api.Task;
+import org.gradle.api.file.DirectoryProperty;
 import org.gradle.api.internal.ConventionTask;
-import org.gradle.api.tasks.Input;
+import org.gradle.api.tasks.Nested;
 import org.gradle.api.tasks.OutputDirectory;
 import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.TaskExecutionException;
@@ -44,7 +45,12 @@ public class BuildInfo extends ConventionTask {
 
 	private final BuildInfoProperties properties = new BuildInfoProperties(getProject());
 
-	private File destinationDir;
+	private final DirectoryProperty destinationDir;
+
+	public BuildInfo() {
+		this.destinationDir = getProject().getObjects().directoryProperty()
+				.convention(getProject().getLayout().getBuildDirectory());
+	}
 
 	/**
 	 * Generates the {@code build-info.properties} file in the configured
@@ -53,17 +59,13 @@ public class BuildInfo extends ConventionTask {
 	@TaskAction
 	public void generateBuildProperties() {
 		try {
-			new BuildPropertiesWriter(
-					new File(getDestinationDir(), "build-info.properties"))
-							.writeBuildProperties(new ProjectDetails(
-									this.properties.getGroup(),
-									this.properties.getArtifact() != null
-											? this.properties.getArtifact()
+			new BuildPropertiesWriter(new File(getDestinationDir(), "build-info.properties"))
+					.writeBuildProperties(
+							new ProjectDetails(this.properties.getGroup(),
+									(this.properties.getArtifact() != null) ? this.properties.getArtifact()
 											: "unspecified",
-									this.properties.getVersion(),
-									this.properties.getName(), this.properties.getTime(),
-									coerceToStringValues(
-											this.properties.getAdditional())));
+									this.properties.getVersion(), this.properties.getName(), this.properties.getTime(),
+									coerceToStringValues(this.properties.getAdditional())));
 		}
 		catch (IOException ex) {
 			throw new TaskExecutionException(this, ex);
@@ -77,8 +79,7 @@ public class BuildInfo extends ConventionTask {
 	 */
 	@OutputDirectory
 	public File getDestinationDir() {
-		return (this.destinationDir != null ? this.destinationDir
-				: getProject().getBuildDir());
+		return this.destinationDir.getAsFile().get();
 	}
 
 	/**
@@ -86,7 +87,7 @@ public class BuildInfo extends ConventionTask {
 	 * @param destinationDir the destination directory
 	 */
 	public void setDestinationDir(File destinationDir) {
-		this.destinationDir = destinationDir;
+		this.destinationDir.set(destinationDir);
 	}
 
 	/**
@@ -94,7 +95,7 @@ public class BuildInfo extends ConventionTask {
 	 * {@code build-info.properties} file.
 	 * @return the properties
 	 */
-	@Input
+	@Nested
 	public BuildInfoProperties getProperties() {
 		return this.properties;
 	}

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -84,7 +84,7 @@ public class ErrorPage {
 	 * @return the status value (or 0 for a page that matches any status)
 	 */
 	public int getStatusCode() {
-		return (this.status != null ? this.status.value() : 0);
+		return (this.status != null) ? this.status.value() : 0;
 	}
 
 	/**
@@ -92,7 +92,7 @@ public class ErrorPage {
 	 * @return the exception type name (or {@code null} if there is none)
 	 */
 	public String getExceptionName() {
-		return (this.exception != null ? this.exception.getName() : null);
+		return (this.exception != null) ? this.exception.getName() : null;
 	}
 
 	/**
@@ -105,16 +105,6 @@ public class ErrorPage {
 	}
 
 	@Override
-	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ObjectUtils.nullSafeHashCode(getExceptionName());
-		result = prime * result + ObjectUtils.nullSafeHashCode(this.path);
-		result = prime * result + this.getStatusCode();
-		return result;
-	}
-
-	@Override
 	public boolean equals(Object obj) {
 		if (this == obj) {
 			return true;
@@ -124,14 +114,20 @@ public class ErrorPage {
 		}
 		if (obj instanceof ErrorPage) {
 			ErrorPage other = (ErrorPage) obj;
-			boolean rtn = true;
-			rtn = rtn && ObjectUtils.nullSafeEquals(getExceptionName(),
-					other.getExceptionName());
-			rtn = rtn && ObjectUtils.nullSafeEquals(this.path, other.path);
-			rtn = rtn && this.status == other.status;
-			return rtn;
+			return ObjectUtils.nullSafeEquals(getExceptionName(), other.getExceptionName())
+					&& ObjectUtils.nullSafeEquals(this.path, other.path) && this.status == other.status;
 		}
 		return false;
+	}
+
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ObjectUtils.nullSafeHashCode(getExceptionName());
+		result = prime * result + ObjectUtils.nullSafeHashCode(this.path);
+		result = prime * result + getStatusCode();
+		return result;
 	}
 
 }

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,50 +29,43 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
+import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.jdbc.support.JdbcTransactionManager;
+import org.springframework.transaction.TransactionManager;
 
 /**
- * {@link EnableAutoConfiguration Auto-configuration} for
- * {@link DataSourceTransactionManager}.
+ * {@link EnableAutoConfiguration Auto-configuration} for {@link JdbcTransactionManager}.
  *
  * @author Dave Syer
  * @author Stephane Nicoll
  * @author Andy Wilkinson
  * @author Kazuki Shimizu
+ * @since 1.0.0
  */
-@Configuration
-@ConditionalOnClass({ JdbcTemplate.class, PlatformTransactionManager.class })
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass({ JdbcTemplate.class, TransactionManager.class })
 @AutoConfigureOrder(Ordered.LOWEST_PRECEDENCE)
 @EnableConfigurationProperties(DataSourceProperties.class)
 public class DataSourceTransactionManagerAutoConfiguration {
 
-	@Configuration
+	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnSingleCandidate(DataSource.class)
-	static class DataSourceTransactionManagerConfiguration {
-
-		private final DataSource dataSource;
-
-		private final TransactionManagerCustomizers transactionManagerCustomizers;
-
-		DataSourceTransactionManagerConfiguration(DataSource dataSource,
-				ObjectProvider<TransactionManagerCustomizers> transactionManagerCustomizers) {
-			this.dataSource = dataSource;
-			this.transactionManagerCustomizers = transactionManagerCustomizers
-					.getIfAvailable();
-		}
+	static class JdbcTransactionManagerConfiguration {
 
 		@Bean
-		@ConditionalOnMissingBean(PlatformTransactionManager.class)
-		public DataSourceTransactionManager transactionManager(
-				DataSourceProperties properties) {
-			DataSourceTransactionManager transactionManager = new DataSourceTransactionManager(
-					this.dataSource);
-			if (this.transactionManagerCustomizers != null) {
-				this.transactionManagerCustomizers.customize(transactionManager);
-			}
+		@ConditionalOnMissingBean(TransactionManager.class)
+		DataSourceTransactionManager transactionManager(Environment environment, DataSource dataSource,
+				ObjectProvider<TransactionManagerCustomizers> transactionManagerCustomizers) {
+			DataSourceTransactionManager transactionManager = createTransactionManager(environment, dataSource);
+			transactionManagerCustomizers.ifAvailable((customizers) -> customizers.customize(transactionManager));
 			return transactionManager;
+		}
+
+		private DataSourceTransactionManager createTransactionManager(Environment environment, DataSource dataSource) {
+			return environment.getProperty("spring.dao.exceptiontranslation.enabled", Boolean.class, Boolean.TRUE)
+					? new JdbcTransactionManager(dataSource) : new DataSourceTransactionManager(dataSource);
 		}
 
 	}

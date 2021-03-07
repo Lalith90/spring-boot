@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,7 @@ import java.net.URL;
 
 import com.hazelcast.config.Config;
 import com.hazelcast.config.XmlConfigBuilder;
+import com.hazelcast.config.YamlConfigBuilder;
 import com.hazelcast.core.Hazelcast;
 import com.hazelcast.core.HazelcastInstance;
 
@@ -35,7 +36,9 @@ import org.springframework.util.StringUtils;
  * @author Stephane Nicoll
  * @author Phillip Webb
  * @since 1.3.0
+ * @deprecated since 2.3.4 in favor of using the Hazelcast API directly
  */
+@Deprecated
 public class HazelcastInstanceFactory {
 
 	private final Config config;
@@ -61,7 +64,7 @@ public class HazelcastInstanceFactory {
 
 	private Config getConfig(Resource configLocation) throws IOException {
 		URL configUrl = configLocation.getURL();
-		Config config = new XmlConfigBuilder(configUrl).build();
+		Config config = createConfig(configUrl);
 		if (ResourceUtils.isFileURL(configUrl)) {
 			config.setConfigurationFile(configLocation.getFile());
 		}
@@ -69,6 +72,14 @@ public class HazelcastInstanceFactory {
 			config.setConfigurationUrl(configUrl);
 		}
 		return config;
+	}
+
+	private static Config createConfig(URL configUrl) throws IOException {
+		String configFileName = configUrl.getPath();
+		if (configFileName.endsWith(".yaml")) {
+			return new YamlConfigBuilder(configUrl).build();
+		}
+		return new XmlConfigBuilder(configUrl).build();
 	}
 
 	/**

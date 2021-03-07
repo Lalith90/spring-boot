@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,7 @@ import org.apache.commons.logging.LogFactory;
 
 import org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent;
 import org.springframework.boot.context.event.ApplicationFailedEvent;
+import org.springframework.boot.diagnostics.FailureAnalysis;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.event.GenericApplicationListener;
 import org.springframework.context.event.SmartApplicationListener;
@@ -37,14 +38,15 @@ import org.springframework.core.ResolvableType;
  *
  * @author Andy Wilkinson
  * @since 2.0.0
+ * @deprecated since 2.4.0 with no direct replacement. {@link FailureAnalysis} is now the
+ * preferred approach for diagnosing and reporting startup failures.
  */
-public final class ClasspathLoggingApplicationListener
-		implements GenericApplicationListener {
+@Deprecated
+public final class ClasspathLoggingApplicationListener implements GenericApplicationListener {
 
 	private static final int ORDER = LoggingApplicationListener.DEFAULT_ORDER + 1;
 
-	private static final Log logger = LogFactory
-			.getLog(ClasspathLoggingApplicationListener.class);
+	private static final Log logger = LogFactory.getLog(ClasspathLoggingApplicationListener.class);
 
 	@Override
 	public void onApplicationEvent(ApplicationEvent event) {
@@ -53,8 +55,7 @@ public final class ClasspathLoggingApplicationListener
 				logger.debug("Application started with classpath: " + getClasspath());
 			}
 			else if (event instanceof ApplicationFailedEvent) {
-				logger.debug(
-						"Application failed to start with classpath: " + getClasspath());
+				logger.debug("Application failed to start with classpath: " + getClasspath());
 			}
 		}
 	}
@@ -72,11 +73,6 @@ public final class ClasspathLoggingApplicationListener
 		}
 		return ApplicationEnvironmentPreparedEvent.class.isAssignableFrom(type)
 				|| ApplicationFailedEvent.class.isAssignableFrom(type);
-	}
-
-	@Override
-	public boolean supportsSourceType(Class<?> sourceType) {
-		return true;
 	}
 
 	private String getClasspath() {

@@ -31,18 +31,21 @@ Next, add your user to the `docker` group. For example:
 $ sudo usermod -a -G docker awilkinson
 ----
 
-You may need to log out and back in again for this change to take affect and for your
+You may need to log out and back in again for this change to take effect and for your
 user to be able to connect to the daemon.
 
 
 
 == Running the tests
 
+NOTE: You need Java 8 to run the integration tests as they are currently skipped for Java
+9 and later.
+
 You're now ready to run the tests. Assuming that you're in the same directory as this
 README, the tests can be launched as follows:
 
 ----
-$ mvn -Pdocker clean verify
+$ gradle intTest
 ----
 
 The first time the tests are run, Docker will create the container images that are used to

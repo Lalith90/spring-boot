@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,9 +16,11 @@
 
 package org.springframework.boot.jdbc;
 
-import javax.annotation.PostConstruct;
+import java.sql.DatabaseMetaData;
+
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.jdbc.datasource.init.DatabasePopulatorUtils;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
@@ -33,7 +35,7 @@ import org.springframework.util.Assert;
  * @author Stephane Nicoll
  * @since 1.5.0
  */
-public abstract class AbstractDataSourceInitializer {
+public abstract class AbstractDataSourceInitializer implements InitializingBean {
 
 	private static final String PLATFORM_PLACEHOLDER = "@@platform@@";
 
@@ -41,15 +43,18 @@ public abstract class AbstractDataSourceInitializer {
 
 	private final ResourceLoader resourceLoader;
 
-	protected AbstractDataSourceInitializer(DataSource dataSource,
-			ResourceLoader resourceLoader) {
+	protected AbstractDataSourceInitializer(DataSource dataSource, ResourceLoader resourceLoader) {
 		Assert.notNull(dataSource, "DataSource must not be null");
 		Assert.notNull(resourceLoader, "ResourceLoader must not be null");
 		this.dataSource = dataSource;
 		this.resourceLoader = resourceLoader;
 	}
 
-	@PostConstruct
+	@Override
+	public void afterPropertiesSet() {
+		initialize();
+	}
+
 	protected void initialize() {
 		if (!isEnabled()) {
 			return;
@@ -70,11 +75,8 @@ public abstract class AbstractDataSourceInitializer {
 		if (getMode() == DataSourceInitializationMode.NEVER) {
 			return false;
 		}
-		if (getMode() == DataSourceInitializationMode.EMBEDDED
-				&& !EmbeddedDatabaseConnection.isEmbedded(this.dataSource)) {
-			return false;
-		}
-		return true;
+		return getMode() != DataSourceInitializationMode.EMBEDDED
+				|| EmbeddedDatabaseConnection.isEmbedded(this.dataSource);
 	}
 
 	/**
@@ -90,9 +92,8 @@ public abstract class AbstractDataSourceInitializer {
 
 	protected String getDatabaseName() {
 		try {
-			String productName = JdbcUtils.commonDatabaseName(JdbcUtils
-					.extractDatabaseMetaData(this.dataSource, "getDatabaseProductName")
-					.toString());
+			String productName = JdbcUtils.commonDatabaseName(
+					JdbcUtils.extractDatabaseMetaData(this.dataSource, DatabaseMetaData::getDatabaseProductName));
 			DatabaseDriver databaseDriver = DatabaseDriver.fromProductName(productName);
 			if (databaseDriver == DatabaseDriver.UNKNOWN) {
 				throw new IllegalStateException("Unable to detect database type");

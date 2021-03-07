@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -41,13 +41,18 @@ final class JettyHandlerWrappers {
 
 	static HandlerWrapper createGzipHandlerWrapper(Compression compression) {
 		GzipHandler handler = new GzipHandler();
-		handler.setMinGzipSize(compression.getMinResponseSize());
+		handler.setMinGzipSize((int) compression.getMinResponseSize().toBytes());
 		handler.setIncludedMimeTypes(compression.getMimeTypes());
 		for (HttpMethod httpMethod : HttpMethod.values()) {
 			handler.addIncludedMethods(httpMethod.name());
 		}
 		if (compression.getExcludedUserAgents() != null) {
-			handler.setExcludedAgentPatterns(compression.getExcludedUserAgents());
+			try {
+				handler.setExcludedAgentPatterns(compression.getExcludedUserAgents());
+			}
+			catch (NoSuchMethodError ex) {
+				// Jetty 10 does not support User-Agent-based exclusions
+			}
 		}
 		return handler;
 	}
@@ -70,8 +75,8 @@ final class JettyHandlerWrappers {
 		}
 
 		@Override
-		public void handle(String target, Request baseRequest, HttpServletRequest request,
-				HttpServletResponse response) throws IOException, ServletException {
+		public void handle(String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response)
+				throws IOException, ServletException {
 			if (!response.getHeaderNames().contains(SERVER_HEADER)) {
 				response.setHeader(SERVER_HEADER, this.value);
 			}

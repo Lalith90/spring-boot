@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,8 +21,10 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.NoSuchElementException;
+import java.util.Random;
 import java.util.function.Function;
 
+import org.springframework.boot.env.Prefixed;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MutablePropertySources;
 import org.springframework.core.env.PropertySource;
@@ -37,13 +39,12 @@ import org.springframework.util.ConcurrentReferenceHashMap.ReferenceType;
  *
  * @author Phillip Webb
  */
-class SpringConfigurationPropertySources
-		implements Iterable<ConfigurationPropertySource> {
+class SpringConfigurationPropertySources implements Iterable<ConfigurationPropertySource> {
 
 	private final Iterable<PropertySource<?>> sources;
 
-	private final Map<PropertySource<?>, ConfigurationPropertySource> cache = new ConcurrentReferenceHashMap<>(
-			16, ReferenceType.SOFT);
+	private final Map<PropertySource<?>, ConfigurationPropertySource> cache = new ConcurrentReferenceHashMap<>(16,
+			ReferenceType.SOFT);
 
 	SpringConfigurationPropertySources(Iterable<PropertySource<?>> sources) {
 		Assert.notNull(sources, "Sources must not be null");
@@ -63,12 +64,14 @@ class SpringConfigurationPropertySources
 			return result;
 		}
 		result = SpringConfigurationPropertySource.from(source);
+		if (source instanceof Prefixed) {
+			result = result.withPrefix(((Prefixed) source).getPrefix());
+		}
 		this.cache.put(source, result);
 		return result;
 	}
 
-	private static class SourcesIterator
-			implements Iterator<ConfigurationPropertySource> {
+	private static class SourcesIterator implements Iterator<ConfigurationPropertySource> {
 
 		private final Deque<Iterator<PropertySource<?>>> iterators;
 
@@ -125,8 +128,14 @@ class SpringConfigurationPropertySources
 		}
 
 		private boolean isIgnored(PropertySource<?> candidate) {
-			return (candidate instanceof StubPropertySource
+			return (isRandomPropertySource(candidate) || candidate instanceof StubPropertySource
 					|| candidate instanceof ConfigurationPropertySourcesPropertySource);
+		}
+
+		private boolean isRandomPropertySource(PropertySource<?> candidate) {
+			Object source = candidate.getSource();
+			return (source instanceof Random) || (source instanceof PropertySource<?>
+					&& ((PropertySource<?>) source).getSource() instanceof Random);
 		}
 
 	}

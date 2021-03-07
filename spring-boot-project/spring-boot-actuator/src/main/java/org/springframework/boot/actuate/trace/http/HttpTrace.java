@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,7 @@ package org.springframework.boot.actuate.trace.http;
 
 import java.net.URI;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -33,7 +34,7 @@ import org.springframework.util.StringUtils;
  */
 public final class HttpTrace {
 
-	private final Instant timestamp = Instant.now();
+	private final Instant timestamp;
 
 	private volatile Principal principal;
 
@@ -45,8 +46,36 @@ public final class HttpTrace {
 
 	private volatile Long timeTaken;
 
+	private final long startNanoTime;
+
+	/**
+	 * Creates a fully-configured {@code HttpTrace} instance. Primarily for use by
+	 * {@link HttpTraceRepository} implementations when recreating a trace from a
+	 * persistent store.
+	 * @param request the request
+	 * @param response the response
+	 * @param timestamp the timestamp of the request-response exchange
+	 * @param principal the principal, if any
+	 * @param session the session, if any
+	 * @param timeTaken the time taken, in milliseconds, to complete the request-response
+	 * exchange, if known
+	 * @since 2.1.0
+	 */
+	public HttpTrace(Request request, Response response, Instant timestamp, Principal principal, Session session,
+			Long timeTaken) {
+		this.request = request;
+		this.response = response;
+		this.timestamp = timestamp;
+		this.principal = principal;
+		this.session = session;
+		this.timeTaken = timeTaken;
+		this.startNanoTime = 0;
+	}
+
 	HttpTrace(TraceableRequest request) {
 		this.request = new Request(request);
+		this.timestamp = Instant.now();
+		this.startNanoTime = System.nanoTime();
 	}
 
 	public Instant getTimestamp() {
@@ -93,6 +122,10 @@ public final class HttpTrace {
 		this.timeTaken = timeTaken;
 	}
 
+	long getStartNanoTime() {
+		return this.startNanoTime;
+	}
+
 	/**
 	 * Trace of an HTTP request.
 	 */
@@ -107,10 +140,24 @@ public final class HttpTrace {
 		private final String remoteAddress;
 
 		private Request(TraceableRequest request) {
-			this.method = request.getMethod();
-			this.uri = request.getUri();
-			this.headers = request.getHeaders();
-			this.remoteAddress = request.getRemoteAddress();
+			this(request.getMethod(), request.getUri(), request.getHeaders(), request.getRemoteAddress());
+		}
+
+		/**
+		 * Creates a fully-configured {@code Request} instance. Primarily for use by
+		 * {@link HttpTraceRepository} implementations when recreating a request from a
+		 * persistent store.
+		 * @param method the HTTP method of the request
+		 * @param uri the URI of the request
+		 * @param headers the request headers
+		 * @param remoteAddress remote address from which the request was sent, if known
+		 * @since 2.1.0
+		 */
+		public Request(String method, URI uri, Map<String, List<String>> headers, String remoteAddress) {
+			this.method = method;
+			this.uri = uri;
+			this.headers = new LinkedHashMap<>(headers);
+			this.remoteAddress = remoteAddress;
 		}
 
 		public String getMethod() {
@@ -141,8 +188,20 @@ public final class HttpTrace {
 		private final Map<String, List<String>> headers;
 
 		Response(TraceableResponse response) {
-			this.status = response.getStatus();
-			this.headers = response.getHeaders();
+			this(response.getStatus(), response.getHeaders());
+		}
+
+		/**
+		 * Creates a fully-configured {@code Response} instance. Primarily for use by
+		 * {@link HttpTraceRepository} implementations when recreating a response from a
+		 * persistent store.
+		 * @param status the status of the response
+		 * @param headers the response headers
+		 * @since 2.1.0
+		 */
+		public Response(int status, Map<String, List<String>> headers) {
+			this.status = status;
+			this.headers = new LinkedHashMap<>(headers);
 		}
 
 		public int getStatus() {
@@ -162,7 +221,12 @@ public final class HttpTrace {
 
 		private final String id;
 
-		private Session(String id) {
+		/**
+		 * Creates a {@code Session}.
+		 * @param id the session id
+		 * @since 2.1.0
+		 */
+		public Session(String id) {
 			this.id = id;
 		}
 
@@ -179,7 +243,12 @@ public final class HttpTrace {
 
 		private final String name;
 
-		private Principal(String name) {
+		/**
+		 * Creates a {@code Principal}.
+		 * @param name the name of the principal
+		 * @since 2.1.0
+		 */
+		public Principal(String name) {
 			this.name = name;
 		}
 

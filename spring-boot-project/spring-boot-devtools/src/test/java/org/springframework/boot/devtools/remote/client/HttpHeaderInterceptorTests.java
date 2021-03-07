@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,12 +18,11 @@ package org.springframework.boot.devtools.remote.client;
 
 import java.io.IOException;
 
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.ExpectedException;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
@@ -32,6 +31,7 @@ import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -40,10 +40,8 @@ import static org.mockito.BDDMockito.given;
  * @author Rob Winch
  * @since 1.3.0
  */
-public class HttpHeaderInterceptorTests {
-
-	@Rule
-	public ExpectedException thrown = ExpectedException.none();
+@ExtendWith(MockitoExtension.class)
+class HttpHeaderInterceptorTests {
 
 	private String name;
 
@@ -63,50 +61,44 @@ public class HttpHeaderInterceptorTests {
 
 	private MockHttpServletRequest httpRequest;
 
-	@Before
-	public void setup() throws Exception {
-		MockitoAnnotations.initMocks(this);
+	@BeforeEach
+	void setup() throws Exception {
 		this.body = new byte[] {};
 		this.httpRequest = new MockHttpServletRequest();
 		this.request = new ServletServerHttpRequest(this.httpRequest);
 		this.name = "X-AUTH-TOKEN";
 		this.value = "secret";
-		given(this.execution.execute(this.request, this.body)).willReturn(this.response);
 		this.interceptor = new HttpHeaderInterceptor(this.name, this.value);
 	}
 
 	@Test
-	public void constructorNullHeaderName() {
-		this.thrown.expect(IllegalArgumentException.class);
-		this.thrown.expectMessage("Name must not be empty");
-		new HttpHeaderInterceptor(null, this.value);
+	void constructorNullHeaderName() {
+		assertThatIllegalArgumentException().isThrownBy(() -> new HttpHeaderInterceptor(null, this.value))
+				.withMessageContaining("Name must not be empty");
 	}
 
 	@Test
-	public void constructorEmptyHeaderName() {
-		this.thrown.expect(IllegalArgumentException.class);
-		this.thrown.expectMessage("Name must not be empty");
-		new HttpHeaderInterceptor("", this.value);
+	void constructorEmptyHeaderName() {
+		assertThatIllegalArgumentException().isThrownBy(() -> new HttpHeaderInterceptor("", this.value))
+				.withMessageContaining("Name must not be empty");
 	}
 
 	@Test
-	public void constructorNullHeaderValue() {
-		this.thrown.expect(IllegalArgumentException.class);
-		this.thrown.expectMessage("Value must not be empty");
-		new HttpHeaderInterceptor(this.name, null);
+	void constructorNullHeaderValue() {
+		assertThatIllegalArgumentException().isThrownBy(() -> new HttpHeaderInterceptor(this.name, null))
+				.withMessageContaining("Value must not be empty");
 	}
 
 	@Test
-	public void constructorEmptyHeaderValue() {
-		this.thrown.expect(IllegalArgumentException.class);
-		this.thrown.expectMessage("Value must not be empty");
-		new HttpHeaderInterceptor(this.name, "");
+	void constructorEmptyHeaderValue() {
+		assertThatIllegalArgumentException().isThrownBy(() -> new HttpHeaderInterceptor(this.name, ""))
+				.withMessageContaining("Value must not be empty");
 	}
 
 	@Test
-	public void intercept() throws IOException {
-		ClientHttpResponse result = this.interceptor.intercept(this.request, this.body,
-				this.execution);
+	void intercept() throws IOException {
+		given(this.execution.execute(this.request, this.body)).willReturn(this.response);
+		ClientHttpResponse result = this.interceptor.intercept(this.request, this.body, this.execution);
 		assertThat(this.request.getHeaders().getFirst(this.name)).isEqualTo(this.value);
 		assertThat(result).isEqualTo(this.response);
 	}

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,16 +16,22 @@
 
 package org.springframework.boot.origin;
 
+import java.io.IOException;
+
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.util.ObjectUtils;
 
 /**
  * {@link Origin} for an item loaded from a text resource. Provides access to the original
- * {@link Resource} that loaded the text and a {@link Location} within it.
+ * {@link Resource} that loaded the text and a {@link Location} within it. If the provided
+ * resource provides an {@link Origin} (e.g. it is an {@link OriginTrackedResource}), then
+ * it will be used as the {@link Origin#getParent() origin parent}.
  *
  * @author Madhura Bhave
  * @author Phillip Webb
  * @since 2.0.0
+ * @see OriginTrackedResource
  */
 public class TextResourceOrigin implements Origin {
 
@@ -55,11 +61,8 @@ public class TextResourceOrigin implements Origin {
 	}
 
 	@Override
-	public int hashCode() {
-		int result = 1;
-		result = 31 * result + ObjectUtils.nullSafeHashCode(this.resource);
-		result = 31 * result + ObjectUtils.nullSafeHashCode(this.location);
-		return result;
+	public Origin getParent() {
+		return Origin.from(this.resource);
 	}
 
 	@Override
@@ -81,14 +84,46 @@ public class TextResourceOrigin implements Origin {
 	}
 
 	@Override
+	public int hashCode() {
+		int result = 1;
+		result = 31 * result + ObjectUtils.nullSafeHashCode(this.resource);
+		result = 31 * result + ObjectUtils.nullSafeHashCode(this.location);
+		return result;
+	}
+
+	@Override
 	public String toString() {
 		StringBuilder result = new StringBuilder();
-		result.append(this.resource != null ? this.resource.getDescription()
-				: "unknown resource [?]");
+		result.append(getResourceDescription(this.resource));
 		if (this.location != null) {
-			result.append(":").append(this.location);
+			result.append(" - ").append(this.location);
 		}
 		return result.toString();
+	}
+
+	private String getResourceDescription(Resource resource) {
+		if (resource instanceof OriginTrackedResource) {
+			return getResourceDescription(((OriginTrackedResource) resource).getResource());
+		}
+		if (resource == null) {
+			return "unknown resource [?]";
+		}
+		if (resource instanceof ClassPathResource) {
+			return getResourceDescription((ClassPathResource) resource);
+		}
+		return resource.getDescription();
+	}
+
+	private String getResourceDescription(ClassPathResource resource) {
+		try {
+			JarUri jarUri = JarUri.from(resource.getURI());
+			if (jarUri != null) {
+				return jarUri.getDescription(resource.getDescription());
+			}
+		}
+		catch (IOException ex) {
+		}
+		return resource.getDescription();
 	}
 
 	/**
@@ -127,11 +162,6 @@ public class TextResourceOrigin implements Origin {
 		}
 
 		@Override
-		public int hashCode() {
-			return (31 * this.line) + this.column;
-		}
-
-		@Override
 		public boolean equals(Object obj) {
 			if (this == obj) {
 				return true;
@@ -144,6 +174,11 @@ public class TextResourceOrigin implements Origin {
 			result = result && this.line == other.line;
 			result = result && this.column == other.column;
 			return result;
+		}
+
+		@Override
+		public int hashCode() {
+			return (31 * this.line) + this.column;
 		}
 
 		@Override

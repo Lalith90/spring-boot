@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,7 +21,7 @@ import java.io.IOException;
 import org.influxdb.InfluxDB;
 import org.influxdb.InfluxDBException;
 import org.influxdb.dto.Pong;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Status;
@@ -36,32 +36,30 @@ import static org.mockito.Mockito.verify;
  *
  * @author Eddú Meléndez
  */
-public class InfluxDbHealthIndicatorTests {
+class InfluxDbHealthIndicatorTests {
 
 	@Test
-	public void influxDbIsUp() {
+	void influxDbIsUp() {
 		Pong pong = mock(Pong.class);
 		given(pong.getVersion()).willReturn("0.9");
-		InfluxDB influxDB = mock(InfluxDB.class);
-		given(influxDB.ping()).willReturn(pong);
-		InfluxDbHealthIndicator healthIndicator = new InfluxDbHealthIndicator(influxDB);
+		InfluxDB influxDb = mock(InfluxDB.class);
+		given(influxDb.ping()).willReturn(pong);
+		InfluxDbHealthIndicator healthIndicator = new InfluxDbHealthIndicator(influxDb);
 		Health health = healthIndicator.health();
 		assertThat(health.getStatus()).isEqualTo(Status.UP);
 		assertThat(health.getDetails().get("version")).isEqualTo("0.9");
-		verify(influxDB).ping();
+		verify(influxDb).ping();
 	}
 
 	@Test
-	public void influxDbIsDown() {
-		InfluxDB influxDB = mock(InfluxDB.class);
-		given(influxDB.ping())
-				.willThrow(new InfluxDBException(new IOException("Connection failed")));
-		InfluxDbHealthIndicator healthIndicator = new InfluxDbHealthIndicator(influxDB);
+	void influxDbIsDown() {
+		InfluxDB influxDb = mock(InfluxDB.class);
+		given(influxDb.ping()).willThrow(new InfluxDBException(new IOException("Connection failed")));
+		InfluxDbHealthIndicator healthIndicator = new InfluxDbHealthIndicator(influxDb);
 		Health health = healthIndicator.health();
 		assertThat(health.getStatus()).isEqualTo(Status.DOWN);
-		assertThat((String) health.getDetails().get("error"))
-				.contains("Connection failed");
-		verify(influxDB).ping();
+		assertThat((String) health.getDetails().get("error")).contains("Connection failed");
+		verify(influxDb).ping();
 	}
 
 }

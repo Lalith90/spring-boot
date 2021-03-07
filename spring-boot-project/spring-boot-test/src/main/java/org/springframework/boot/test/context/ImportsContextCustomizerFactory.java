@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,10 +21,12 @@ import java.util.List;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.MergedAnnotations;
 import org.springframework.test.context.ContextConfigurationAttributes;
 import org.springframework.test.context.ContextCustomizer;
 import org.springframework.test.context.ContextCustomizerFactory;
+import org.springframework.test.context.TestContextAnnotationUtils;
+import org.springframework.test.context.TestContextAnnotationUtils.AnnotationDescriptor;
 import org.springframework.util.Assert;
 import org.springframework.util.ReflectionUtils;
 
@@ -40,9 +42,11 @@ class ImportsContextCustomizerFactory implements ContextCustomizerFactory {
 	@Override
 	public ContextCustomizer createContextCustomizer(Class<?> testClass,
 			List<ContextConfigurationAttributes> configAttributes) {
-		if (AnnotatedElementUtils.findMergedAnnotation(testClass, Import.class) != null) {
-			assertHasNoBeanMethods(testClass);
-			return new ImportsContextCustomizer(testClass);
+		AnnotationDescriptor<Import> descriptor = TestContextAnnotationUtils.findAnnotationDescriptor(testClass,
+				Import.class);
+		if (descriptor != null) {
+			assertHasNoBeanMethods(descriptor.getRootDeclaringClass());
+			return new ImportsContextCustomizer(descriptor.getRootDeclaringClass());
 		}
 		return null;
 	}
@@ -52,7 +56,7 @@ class ImportsContextCustomizerFactory implements ContextCustomizerFactory {
 	}
 
 	private void assertHasNoBeanMethods(Method method) {
-		Assert.state(!AnnotatedElementUtils.isAnnotated(method, Bean.class),
+		Assert.state(!MergedAnnotations.from(method).isPresent(Bean.class),
 				"Test classes cannot include @Bean methods");
 	}
 

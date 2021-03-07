@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,8 +29,7 @@ import java.util.Map;
  * @since 1.3.0
  */
 @SuppressWarnings("serial")
-public class SimpleConfigurationMetadataRepository
-		implements ConfigurationMetadataRepository, Serializable {
+public class SimpleConfigurationMetadataRepository implements ConfigurationMetadataRepository, Serializable {
 
 	private final Map<String, ConfigurationMetadataGroup> allGroups = new HashMap<>();
 
@@ -62,7 +61,7 @@ public class SimpleConfigurationMetadataRepository
 			}
 			String sourceType = source.getType();
 			if (sourceType != null) {
-				putIfAbsent(group.getSources(), sourceType, source);
+				addOrMergeSource(group.getSources(), sourceType, source);
 			}
 		}
 	}
@@ -73,8 +72,7 @@ public class SimpleConfigurationMetadataRepository
 	 * @param property the property to add
 	 * @param source the source
 	 */
-	public void add(ConfigurationMetadataProperty property,
-			ConfigurationMetadataSource source) {
+	public void add(ConfigurationMetadataProperty property, ConfigurationMetadataSource source) {
 		if (source != null) {
 			putIfAbsent(source.getProperties(), property.getId(), property);
 		}
@@ -93,11 +91,9 @@ public class SimpleConfigurationMetadataRepository
 			}
 			else {
 				// Merge properties
-				group.getProperties().forEach((name, value) -> putIfAbsent(
-						existingGroup.getProperties(), name, value));
+				group.getProperties().forEach((name, value) -> putIfAbsent(existingGroup.getProperties(), name, value));
 				// Merge sources
-				group.getSources().forEach((name,
-						value) -> putIfAbsent(existingGroup.getSources(), name, value));
+				group.getSources().forEach((name, value) -> addOrMergeSource(existingGroup.getSources(), name, value));
 			}
 		}
 
@@ -113,6 +109,17 @@ public class SimpleConfigurationMetadataRepository
 			return rootGroup;
 		}
 		return this.allGroups.get(source.getGroupId());
+	}
+
+	private void addOrMergeSource(Map<String, ConfigurationMetadataSource> sources, String name,
+			ConfigurationMetadataSource source) {
+		ConfigurationMetadataSource existingSource = sources.get(name);
+		if (existingSource == null) {
+			sources.put(name, source);
+		}
+		else {
+			source.getProperties().forEach((k, v) -> putIfAbsent(existingSource.getProperties(), k, v));
+		}
 	}
 
 	private <V> void putIfAbsent(Map<String, V> map, String key, V value) {

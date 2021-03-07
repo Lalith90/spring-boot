@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,8 @@ import java.util.Set;
  * Include options for HTTP tracing.
  *
  * @author Wallace Wadge
+ * @author Emily Tsanova
+ * @author Joseph Beeton
  * @since 2.0.0
  */
 public enum Include {
@@ -75,7 +77,6 @@ public enum Include {
 		Set<Include> defaultIncludes = new LinkedHashSet<>();
 		defaultIncludes.add(Include.REQUEST_HEADERS);
 		defaultIncludes.add(Include.RESPONSE_HEADERS);
-		defaultIncludes.add(Include.COOKIE_HEADERS);
 		defaultIncludes.add(Include.TIME_TAKEN);
 		DEFAULT_INCLUDES = Collections.unmodifiableSet(defaultIncludes);
 	}

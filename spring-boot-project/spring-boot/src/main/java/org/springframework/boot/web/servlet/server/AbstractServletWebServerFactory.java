@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -54,8 +55,7 @@ import org.springframework.util.ClassUtils;
  * @author Brian Clozel
  * @since 2.0.0
  */
-public abstract class AbstractServletWebServerFactory
-		extends AbstractConfigurableWebServerFactory
+public abstract class AbstractServletWebServerFactory extends AbstractConfigurableWebServerFactory
 		implements ConfigurableServletWebServerFactory {
 
 	protected final Log logger = LogFactory.getLog(getClass());
@@ -66,7 +66,7 @@ public abstract class AbstractServletWebServerFactory
 
 	private Session session = new Session();
 
-	private boolean registerDefaultServlet = true;
+	private boolean registerDefaultServlet = false;
 
 	private MimeMappings mimeMappings = new MimeMappings(MimeMappings.DEFAULT);
 
@@ -81,6 +81,8 @@ public abstract class AbstractServletWebServerFactory
 	private final DocumentRoot documentRoot = new DocumentRoot(this.logger);
 
 	private final StaticResourceJars staticResourceJars = new StaticResourceJars();
+
+	private final Set<String> webListenerClassNames = new HashSet<>();
 
 	/**
 	 * Create a new {@link AbstractServletWebServerFactory} instance.
@@ -128,12 +130,10 @@ public abstract class AbstractServletWebServerFactory
 		Assert.notNull(contextPath, "ContextPath must not be null");
 		if (!contextPath.isEmpty()) {
 			if ("/".equals(contextPath)) {
-				throw new IllegalArgumentException(
-						"Root ContextPath must be specified using an empty string");
+				throw new IllegalArgumentException("Root ContextPath must be specified using an empty string");
 			}
 			if (!contextPath.startsWith("/") || contextPath.endsWith("/")) {
-				throw new IllegalArgumentException(
-						"ContextPath must start with '/' and not end with '/'");
+				throw new IllegalArgumentException("ContextPath must start with '/' and not end with '/'");
 			}
 		}
 	}
@@ -247,11 +247,9 @@ public abstract class AbstractServletWebServerFactory
 	 * @return a complete set of merged initializers (with the specified parameters
 	 * appearing first)
 	 */
-	protected final ServletContextInitializer[] mergeInitializers(
-			ServletContextInitializer... initializers) {
+	protected final ServletContextInitializer[] mergeInitializers(ServletContextInitializer... initializers) {
 		List<ServletContextInitializer> mergedInitializers = new ArrayList<>();
-		mergedInitializers.add((servletContext) -> this.initParameters
-				.forEach(servletContext::setInitParameter));
+		mergedInitializers.add((servletContext) -> this.initParameters.forEach(servletContext::setInitParameter));
 		mergedInitializers.add(new SessionConfiguringInitializer(this.session));
 		mergedInitializers.addAll(Arrays.asList(initializers));
 		mergedInitializers.addAll(this.initializers);
@@ -263,8 +261,8 @@ public abstract class AbstractServletWebServerFactory
 	 * @return {@code true} if the servlet should be registered, otherwise {@code false}
 	 */
 	protected boolean shouldRegisterJspServlet() {
-		return this.jsp != null && this.jsp.getRegistered() && ClassUtils
-				.isPresent(this.jsp.getClassName(), getClass().getClassLoader());
+		return this.jsp != null && this.jsp.getRegistered()
+				&& ClassUtils.isPresent(this.jsp.getClassName(), getClass().getClassLoader());
 	}
 
 	/**
@@ -288,12 +286,20 @@ public abstract class AbstractServletWebServerFactory
 		return this.session.getSessionStoreDirectory().getValidDirectory(mkdirs);
 	}
 
+	@Override
+	public void addWebListeners(String... webListenerClassNames) {
+		this.webListenerClassNames.addAll(Arrays.asList(webListenerClassNames));
+	}
+
+	protected final Set<String> getWebListenerClassNames() {
+		return this.webListenerClassNames;
+	}
+
 	/**
 	 * {@link ServletContextInitializer} to apply appropriate parts of the {@link Session}
 	 * configuration.
 	 */
-	private static class SessionConfiguringInitializer
-			implements ServletContextInitializer {
+	private static class SessionConfiguringInitializer implements ServletContextInitializer {
 
 		private final Session session;
 
@@ -304,8 +310,7 @@ public abstract class AbstractServletWebServerFactory
 		@Override
 		public void onStartup(ServletContext servletContext) throws ServletException {
 			if (this.session.getTrackingModes() != null) {
-				servletContext
-						.setSessionTrackingModes(unwrap(this.session.getTrackingModes()));
+				servletContext.setSessionTrackingModes(unwrap(this.session.getTrackingModes()));
 			}
 			configureSessionCookie(servletContext.getSessionCookieConfig());
 		}
@@ -335,8 +340,7 @@ public abstract class AbstractServletWebServerFactory
 			}
 		}
 
-		private Set<javax.servlet.SessionTrackingMode> unwrap(
-				Set<Session.SessionTrackingMode> modes) {
+		private Set<javax.servlet.SessionTrackingMode> unwrap(Set<Session.SessionTrackingMode> modes) {
 			if (modes == null) {
 				return null;
 			}

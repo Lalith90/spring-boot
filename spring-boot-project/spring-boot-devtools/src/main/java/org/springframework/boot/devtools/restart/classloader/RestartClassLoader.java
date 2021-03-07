@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,7 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.security.ProtectionDomain;
 import java.util.Enumeration;
 
 import org.apache.commons.logging.Log;
@@ -61,8 +62,7 @@ public class RestartClassLoader extends URLClassLoader implements SmartClassLoad
 	 * URLs were created.
 	 * @param urls the urls managed by the classloader
 	 */
-	public RestartClassLoader(ClassLoader parent, URL[] urls,
-			ClassLoaderFileRepository updatedFiles) {
+	public RestartClassLoader(ClassLoader parent, URL[] urls, ClassLoaderFileRepository updatedFiles) {
 		this(parent, urls, updatedFiles, LogFactory.getLog(RestartClassLoader.class));
 	}
 
@@ -74,8 +74,7 @@ public class RestartClassLoader extends URLClassLoader implements SmartClassLoad
 	 * @param urls the urls managed by the classloader
 	 * @param logger the logger used for messages
 	 */
-	public RestartClassLoader(ClassLoader parent, URL[] urls,
-			ClassLoaderFileRepository updatedFiles, Log logger) {
+	public RestartClassLoader(ClassLoader parent, URL[] urls, ClassLoaderFileRepository updatedFiles, Log logger) {
 		super(urls, parent);
 		Assert.notNull(parent, "Parent must not be null");
 		Assert.notNull(updatedFiles, "UpdatedFiles must not be null");
@@ -126,13 +125,11 @@ public class RestartClassLoader extends URLClassLoader implements SmartClassLoad
 		if (file.getKind() == Kind.DELETED) {
 			return null;
 		}
-		return AccessController
-				.doPrivileged((PrivilegedAction<URL>) () -> createFileUrl(name, file));
+		return AccessController.doPrivileged((PrivilegedAction<URL>) () -> createFileUrl(name, file));
 	}
 
 	@Override
-	public Class<?> loadClass(String name, boolean resolve)
-			throws ClassNotFoundException {
+	public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
 		String path = name.replace('.', '/').concat(".class");
 		ClassLoaderFile file = this.updatedFiles.getFile(path);
 		if (file != null && file.getKind() == Kind.DELETED) {
@@ -145,7 +142,7 @@ public class RestartClassLoader extends URLClassLoader implements SmartClassLoad
 					loadedClass = findClass(name);
 				}
 				catch (ClassNotFoundException ex) {
-					loadedClass = getParent().loadClass(name);
+					loadedClass = Class.forName(name, false, getParent());
 				}
 			}
 			if (resolve) {
@@ -171,10 +168,14 @@ public class RestartClassLoader extends URLClassLoader implements SmartClassLoad
 		});
 	}
 
+	@Override
+	public Class<?> publicDefineClass(String name, byte[] b, ProtectionDomain protectionDomain) {
+		return defineClass(name, b, 0, b.length, protectionDomain);
+	}
+
 	private URL createFileUrl(String name, ClassLoaderFile file) {
 		try {
-			return new URL("reloaded", null, -1, "/" + name,
-					new ClassLoaderFileURLStreamHandler(file));
+			return new URL("reloaded", null, -1, "/" + name, new ClassLoaderFileURLStreamHandler(file));
 		}
 		catch (MalformedURLException ex) {
 			throw new IllegalStateException(ex);

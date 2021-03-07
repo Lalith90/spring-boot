@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,8 +32,7 @@ public class CloudFoundryAuthorizationException extends RuntimeException {
 		this(reason, message, null);
 	}
 
-	public CloudFoundryAuthorizationException(Reason reason, String message,
-			Throwable cause) {
+	public CloudFoundryAuthorizationException(Reason reason, String message, Throwable cause) {
 		super(message, cause);
 		this.reason = reason;
 	}
@@ -59,24 +58,54 @@ public class CloudFoundryAuthorizationException extends RuntimeException {
 	 */
 	public enum Reason {
 
+		/**
+		 * Access Denied.
+		 */
 		ACCESS_DENIED(HttpStatus.FORBIDDEN),
 
+		/**
+		 * Invalid Audience.
+		 */
 		INVALID_AUDIENCE(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Invalid Issuer.
+		 */
 		INVALID_ISSUER(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Invalid Key ID.
+		 */
 		INVALID_KEY_ID(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Invalid Signature.
+		 */
 		INVALID_SIGNATURE(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Invalid Token.
+		 */
 		INVALID_TOKEN(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Missing Authorization.
+		 */
 		MISSING_AUTHORIZATION(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Token Expired.
+		 */
 		TOKEN_EXPIRED(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Unsupported Token Signing Algorithm.
+		 */
 		UNSUPPORTED_TOKEN_SIGNING_ALGORITHM(HttpStatus.UNAUTHORIZED),
 
+		/**
+		 * Service Unavailable.
+		 */
 		SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE);
 
 		private final HttpStatus status;

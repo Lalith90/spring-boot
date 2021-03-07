@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,6 +24,7 @@ import java.util.Enumeration;
 import org.apache.catalina.loader.ParallelWebappClassLoader;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.tomcat.util.compat.JreCompat;
 
 /**
  * Extension of Tomcat's {@link ParallelWebappClassLoader} that does not consider the
@@ -32,15 +33,17 @@ import org.apache.commons.logging.LogFactory;
  * executable archives).
  *
  * @author Phillip Webb
+ * @author Andy Clement
  * @since 2.0.0
  */
 public class TomcatEmbeddedWebappClassLoader extends ParallelWebappClassLoader {
 
-	private static final Log logger = LogFactory
-			.getLog(TomcatEmbeddedWebappClassLoader.class);
+	private static final Log logger = LogFactory.getLog(TomcatEmbeddedWebappClassLoader.class);
 
 	static {
-		ClassLoader.registerAsParallelCapable();
+		if (!JreCompat.isGraalAvailable()) {
+			ClassLoader.registerAsParallelCapable();
+		}
 	}
 
 	public TomcatEmbeddedWebappClassLoader() {
@@ -61,11 +64,10 @@ public class TomcatEmbeddedWebappClassLoader extends ParallelWebappClassLoader {
 	}
 
 	@Override
-	public Class<?> loadClass(String name, boolean resolve)
-			throws ClassNotFoundException {
-		synchronized (getClassLoadingLock(name)) {
+	public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+		synchronized (JreCompat.isGraalAvailable() ? this : getClassLoadingLock(name)) {
 			Class<?> result = findExistingLoadedClass(name);
-			result = (result != null ? result : doLoadClass(name));
+			result = (result != null) ? result : doLoadClass(name);
 			if (result == null) {
 				throw new ClassNotFoundException(name);
 			}
@@ -75,7 +77,7 @@ public class TomcatEmbeddedWebappClassLoader extends ParallelWebappClassLoader {
 
 	private Class<?> findExistingLoadedClass(String name) {
 		Class<?> resultClass = findLoadedClass0(name);
-		resultClass = (resultClass != null ? resultClass : findLoadedClass(name));
+		resultClass = (resultClass != null || JreCompat.isGraalAvailable()) ? resultClass : findLoadedClass(name);
 		return resultClass;
 	}
 
@@ -83,10 +85,10 @@ public class TomcatEmbeddedWebappClassLoader extends ParallelWebappClassLoader {
 		checkPackageAccess(name);
 		if ((this.delegate || filter(name, true))) {
 			Class<?> result = loadFromParent(name);
-			return (result != null ? result : findClassIgnoringNotFound(name));
+			return (result != null) ? result : findClassIgnoringNotFound(name);
 		}
 		Class<?> result = findClassIgnoringNotFound(name);
-		return (result != null ? result : loadFromParent(name));
+		return (result != null) ? result : loadFromParent(name);
 	}
 
 	private Class<?> resolveIfNecessary(Class<?> resultClass, boolean resolve) {
@@ -128,12 +130,10 @@ public class TomcatEmbeddedWebappClassLoader extends ParallelWebappClassLoader {
 	private void checkPackageAccess(String name) throws ClassNotFoundException {
 		if (this.securityManager != null && name.lastIndexOf('.') >= 0) {
 			try {
-				this.securityManager
-						.checkPackageAccess(name.substring(0, name.lastIndexOf('.')));
+				this.securityManager.checkPackageAccess(name.substring(0, name.lastIndexOf('.')));
 			}
 			catch (SecurityException ex) {
-				throw new ClassNotFoundException("Security Violation, attempt to use "
-						+ "Restricted Class: " + name, ex);
+				throw new ClassNotFoundException("Security Violation, attempt to use Restricted Class: " + name, ex);
 			}
 		}
 	}

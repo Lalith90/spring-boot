@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,12 +33,14 @@ import jline.console.completer.StringsCompleter;
 import org.springframework.boot.cli.command.Command;
 import org.springframework.boot.cli.command.options.OptionHelp;
 import org.springframework.boot.cli.util.Log;
+import org.springframework.util.StringUtils;
 
 /**
  * JLine {@link Completer} for Spring Boot {@link Command}s.
  *
  * @author Jon Brisbin
  * @author Phillip Webb
+ * @since 1.0.0
  */
 public class CommandCompleter extends StringsCompleter {
 
@@ -48,8 +50,8 @@ public class CommandCompleter extends StringsCompleter {
 
 	private final ConsoleReader console;
 
-	public CommandCompleter(ConsoleReader consoleReader,
-			ArgumentDelimiter argumentDelimiter, Iterable<Command> commands) {
+	public CommandCompleter(ConsoleReader consoleReader, ArgumentDelimiter argumentDelimiter,
+			Iterable<Command> commands) {
 		this.console = consoleReader;
 		List<String> names = new ArrayList<>();
 		for (Command command : commands) {
@@ -59,10 +61,9 @@ public class CommandCompleter extends StringsCompleter {
 			for (OptionHelp optionHelp : command.getOptionsHelp()) {
 				options.addAll(optionHelp.getOptions());
 			}
-			AggregateCompleter argumentCompleters = new AggregateCompleter(
-					new StringsCompleter(options), new FileNameCompleter());
-			ArgumentCompleter argumentCompleter = new ArgumentCompleter(argumentDelimiter,
-					argumentCompleters);
+			AggregateCompleter argumentCompleters = new AggregateCompleter(new StringsCompleter(options),
+					new FileNameCompleter());
+			ArgumentCompleter argumentCompleter = new ArgumentCompleter(argumentDelimiter, argumentCompleters);
 			argumentCompleter.setStrict(false);
 			this.commandCompleters.put(command.getName(), argumentCompleter);
 		}
@@ -74,7 +75,7 @@ public class CommandCompleter extends StringsCompleter {
 		int completionIndex = super.complete(buffer, cursor, candidates);
 		int spaceIndex = buffer.indexOf(' ');
 		String commandName = ((spaceIndex != -1) ? buffer.substring(0, spaceIndex) : "");
-		if (!"".equals(commandName.trim())) {
+		if (StringUtils.hasText(commandName)) {
 			for (Command command : this.commands) {
 				if (command.getName().equals(commandName)) {
 					if (cursor == buffer.length() && buffer.endsWith(" ")) {
@@ -99,16 +100,15 @@ public class CommandCompleter extends StringsCompleter {
 			for (OptionHelp optionHelp : command.getOptionsHelp()) {
 				OptionHelpLine optionHelpLine = new OptionHelpLine(optionHelp);
 				optionHelpLines.add(optionHelpLine);
-				maxOptionsLength = Math.max(maxOptionsLength,
-						optionHelpLine.getOptions().length());
+				maxOptionsLength = Math.max(maxOptionsLength, optionHelpLine.getOptions().length());
 			}
 
 			this.console.println();
 			this.console.println("Usage:");
 			this.console.println(command.getName() + " " + command.getUsageHelp());
 			for (OptionHelpLine optionHelpLine : optionHelpLines) {
-				this.console.println(String.format("\t%" + maxOptionsLength + "s: %s",
-						optionHelpLine.getOptions(), optionHelpLine.getUsage()));
+				this.console.println(String.format("\t%" + maxOptionsLength + "s: %s", optionHelpLine.getOptions(),
+						optionHelpLine.getUsage()));
 			}
 			this.console.drawLine();
 		}
@@ -127,20 +127,15 @@ public class CommandCompleter extends StringsCompleter {
 		private final String usage;
 
 		OptionHelpLine(OptionHelp optionHelp) {
-			StringBuilder options = new StringBuilder();
-			for (String option : optionHelp.getOptions()) {
-				options.append(options.length() != 0 ? ", " : "");
-				options.append(option);
-			}
-			this.options = options.toString();
+			this.options = String.join(", ", optionHelp.getOptions());
 			this.usage = optionHelp.getUsageHelp();
 		}
 
-		public String getOptions() {
+		String getOptions() {
 			return this.options;
 		}
 
-		public String getUsage() {
+		String getUsage() {
 			return this.usage;
 		}
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -53,10 +53,8 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 	public void customize(Connector connector) {
 		ProtocolHandler handler = connector.getProtocolHandler();
 		Assert.state(handler instanceof AbstractHttp11JsseProtocol,
-				"To use SSL, the connector's protocol handler must be an "
-						+ "AbstractHttp11JsseProtocol subclass");
-		configureSsl((AbstractHttp11JsseProtocol<?>) handler, this.ssl,
-				this.sslStoreProvider);
+				"To use SSL, the connector's protocol handler must be an AbstractHttp11JsseProtocol subclass");
+		configureSsl((AbstractHttp11JsseProtocol<?>) handler, this.ssl, this.sslStoreProvider);
 		connector.setScheme("https");
 		connector.setSecure(true);
 	}
@@ -67,13 +65,16 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 	 * @param ssl the ssl details
 	 * @param sslStoreProvider the ssl store provider
 	 */
-	protected void configureSsl(AbstractHttp11JsseProtocol<?> protocol, Ssl ssl,
-			SslStoreProvider sslStoreProvider) {
+	protected void configureSsl(AbstractHttp11JsseProtocol<?> protocol, Ssl ssl, SslStoreProvider sslStoreProvider) {
 		protocol.setSSLEnabled(true);
 		protocol.setSslProtocol(ssl.getProtocol());
 		configureSslClientAuth(protocol, ssl);
-		protocol.setKeystorePass(ssl.getKeyStorePassword());
-		protocol.setKeyPass(ssl.getKeyPassword());
+		if (ssl.getKeyStorePassword() != null) {
+			protocol.setKeystorePass(ssl.getKeyStorePassword());
+		}
+		if (ssl.getKeyPassword() != null) {
+			protocol.setKeyPass(ssl.getKeyPassword());
+		}
 		protocol.setKeyAlias(ssl.getKeyAlias());
 		String ciphers = StringUtils.arrayToCommaDelimitedString(ssl.getCiphers());
 		if (StringUtils.hasText(ciphers)) {
@@ -81,8 +82,7 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 		}
 		if (ssl.getEnabledProtocols() != null) {
 			for (SSLHostConfig sslHostConfig : protocol.findSslHostConfigs()) {
-				sslHostConfig.setProtocols(StringUtils
-						.arrayToCommaDelimitedString(ssl.getEnabledProtocols()));
+				sslHostConfig.setProtocols(StringUtils.arrayToCommaDelimitedString(ssl.getEnabledProtocols()));
 			}
 		}
 		if (sslStoreProvider != null) {
@@ -107,20 +107,16 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 			SslStoreProvider sslStoreProvider) {
 		Assert.isInstanceOf(Http11NioProtocol.class, protocol,
 				"SslStoreProvider can only be used with Http11NioProtocol");
-		TomcatURLStreamHandlerFactory instance = TomcatURLStreamHandlerFactory
-				.getInstance();
-		instance.addUserFactory(
-				new SslStoreProviderUrlStreamHandlerFactory(sslStoreProvider));
+		TomcatURLStreamHandlerFactory instance = TomcatURLStreamHandlerFactory.getInstance();
+		instance.addUserFactory(new SslStoreProviderUrlStreamHandlerFactory(sslStoreProvider));
 		try {
 			if (sslStoreProvider.getKeyStore() != null) {
 				protocol.setKeystorePass("");
-				protocol.setKeystoreFile(
-						SslStoreProviderUrlStreamHandlerFactory.KEY_STORE_URL);
+				protocol.setKeystoreFile(SslStoreProviderUrlStreamHandlerFactory.KEY_STORE_URL);
 			}
 			if (sslStoreProvider.getTrustStore() != null) {
 				protocol.setTruststorePass("");
-				protocol.setTruststoreFile(
-						SslStoreProviderUrlStreamHandlerFactory.TRUST_STORE_URL);
+				protocol.setTruststoreFile(SslStoreProviderUrlStreamHandlerFactory.TRUST_STORE_URL);
 			}
 		}
 		catch (Exception ex) {
@@ -132,9 +128,8 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 		try {
 			protocol.setKeystoreFile(ResourceUtils.getURL(ssl.getKeyStore()).toString());
 		}
-		catch (FileNotFoundException ex) {
-			throw new WebServerException("Could not load key store: " + ex.getMessage(),
-					ex);
+		catch (Exception ex) {
+			throw new WebServerException("Could not load key store '" + ssl.getKeyStore() + "'", ex);
 		}
 		if (ssl.getKeyStoreType() != null) {
 			protocol.setKeystoreType(ssl.getKeyStoreType());
@@ -147,15 +142,15 @@ class SslConnectorCustomizer implements TomcatConnectorCustomizer {
 	private void configureSslTrustStore(AbstractHttp11JsseProtocol<?> protocol, Ssl ssl) {
 		if (ssl.getTrustStore() != null) {
 			try {
-				protocol.setTruststoreFile(
-						ResourceUtils.getURL(ssl.getTrustStore()).toString());
+				protocol.setTruststoreFile(ResourceUtils.getURL(ssl.getTrustStore()).toString());
 			}
 			catch (FileNotFoundException ex) {
-				throw new WebServerException(
-						"Could not load trust store: " + ex.getMessage(), ex);
+				throw new WebServerException("Could not load trust store: " + ex.getMessage(), ex);
 			}
 		}
-		protocol.setTruststorePass(ssl.getTrustStorePassword());
+		if (ssl.getTrustStorePassword() != null) {
+			protocol.setTruststorePass(ssl.getTrustStorePassword());
+		}
 		if (ssl.getTrustStoreType() != null) {
 			protocol.setTruststoreType(ssl.getTrustStoreType());
 		}

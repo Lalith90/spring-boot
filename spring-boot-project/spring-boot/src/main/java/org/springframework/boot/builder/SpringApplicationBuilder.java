@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -28,15 +28,21 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.springframework.beans.factory.support.BeanNameGenerator;
+import org.springframework.boot.ApplicationContextFactory;
 import org.springframework.boot.Banner;
+import org.springframework.boot.BootstrapRegistry;
+import org.springframework.boot.Bootstrapper;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
+import org.springframework.boot.convert.ApplicationConversionService;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextInitializer;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
 import org.springframework.core.io.ResourceLoader;
+import org.springframework.core.metrics.ApplicationStartup;
 import org.springframework.util.StringUtils;
 
 /**
@@ -62,6 +68,7 @@ import org.springframework.util.StringUtils;
  *
  * @author Dave Syer
  * @author Andy Wilkinson
+ * @since 1.0.0
  * @see SpringApplication
  */
 public class SpringApplicationBuilder {
@@ -72,7 +79,7 @@ public class SpringApplicationBuilder {
 
 	private SpringApplicationBuilder parent;
 
-	private final AtomicBoolean running = new AtomicBoolean(false);
+	private final AtomicBoolean running = new AtomicBoolean();
 
 	private final Set<Class<?>> sources = new LinkedHashSet<>();
 
@@ -94,8 +101,8 @@ public class SpringApplicationBuilder {
 	 * Creates a new {@link org.springframework.boot.SpringApplication} instances from the
 	 * given sources. Subclasses may override in order to provide a custom subclass of
 	 * {@link org.springframework.boot.SpringApplication}
-	 * @param sources The sources
-	 * @return The {@link org.springframework.boot.SpringApplication} instance
+	 * @param sources the sources
+	 * @return the {@link org.springframework.boot.SpringApplication} instance
 	 * @since 1.1.0
 	 */
 	protected SpringApplication createSpringApplication(Class<?>... sources) {
@@ -146,8 +153,7 @@ public class SpringApplicationBuilder {
 			if (!this.registerShutdownHookApplied) {
 				this.application.setRegisterShutdownHook(false);
 			}
-			initializers(new ParentContextApplicationContextInitializer(
-					this.parent.run(args)));
+			initializers(new ParentContextApplicationContextInitializer(this.parent.run(args)));
 		}
 	}
 
@@ -208,9 +214,8 @@ public class SpringApplicationBuilder {
 	 */
 	public SpringApplicationBuilder parent(Class<?>... sources) {
 		if (this.parent == null) {
-			this.parent = new SpringApplicationBuilder(sources)
-					.web(WebApplicationType.NONE).properties(this.defaultProperties)
-					.environment(this.environment);
+			this.parent = new SpringApplicationBuilder(sources).web(WebApplicationType.NONE)
+					.properties(this.defaultProperties).environment(this.environment);
 		}
 		else {
 			this.parent.sources(sources);
@@ -271,10 +276,23 @@ public class SpringApplicationBuilder {
 	 * Explicitly set the context class to be used.
 	 * @param cls the context class to use
 	 * @return the current builder
+	 * @deprecated since 2.4.0 in favor of
+	 * {@link #contextFactory(ApplicationContextFactory)}
 	 */
-	public SpringApplicationBuilder contextClass(
-			Class<? extends ConfigurableApplicationContext> cls) {
+	@Deprecated
+	public SpringApplicationBuilder contextClass(Class<? extends ConfigurableApplicationContext> cls) {
 		this.application.setApplicationContextClass(cls);
+		return this;
+	}
+
+	/**
+	 * Explicitly set the factory used to create the application context.
+	 * @param factory the factory to use
+	 * @return the current builder
+	 * @since 2.4.0
+	 */
+	public SpringApplicationBuilder contextFactory(ApplicationContextFactory factory) {
+		this.application.setApplicationContextFactory(factory);
 		return this;
 	}
 
@@ -313,7 +331,7 @@ public class SpringApplicationBuilder {
 	/**
 	 * Sets the {@link Banner} instance which will be used to print the banner when no
 	 * static banner file is provided.
-	 * @param banner The banner to use
+	 * @param banner the banner to use
 	 * @return the current builder
 	 */
 	public SpringApplicationBuilder banner(Banner banner) {
@@ -364,17 +382,54 @@ public class SpringApplicationBuilder {
 	 * @param addCommandLineProperties the flag to set. Default true.
 	 * @return the current builder
 	 */
-	public SpringApplicationBuilder addCommandLineProperties(
-			boolean addCommandLineProperties) {
+	public SpringApplicationBuilder addCommandLineProperties(boolean addCommandLineProperties) {
 		this.application.setAddCommandLineProperties(addCommandLineProperties);
 		return this;
 	}
 
 	/**
+	 * Flag to indicate if the {@link ApplicationConversionService} should be added to the
+	 * application context's {@link Environment}.
+	 * @param addConversionService if the conversion service should be added.
+	 * @return the current builder
+	 * @since 2.1.0
+	 */
+	public SpringApplicationBuilder setAddConversionService(boolean addConversionService) {
+		this.application.setAddConversionService(addConversionService);
+		return this;
+	}
+
+	/**
+	 * Adds a {@link Bootstrapper} that can be used to initialize the
+	 * {@link BootstrapRegistry}.
+	 * @param bootstrapper the bootstraper
+	 * @return the current builder
+	 * @since 2.4.0
+	 */
+	public SpringApplicationBuilder addBootstrapper(Bootstrapper bootstrapper) {
+		this.application.addBootstrapper(bootstrapper);
+		return this;
+	}
+
+	/**
+	 * Flag to control whether the application should be initialized lazily.
+	 * @param lazyInitialization the flag to set. Defaults to false.
+	 * @return the current builder
+	 * @since 2.2
+	 */
+	public SpringApplicationBuilder lazyInitialization(boolean lazyInitialization) {
+		this.application.setLazyInitialization(lazyInitialization);
+		return this;
+	}
+
+	/**
 	 * Default properties for the environment in the form {@code key=value} or
-	 * {@code key:value}.
+	 * {@code key:value}. Multiple calls to this method are cumulative and will not clear
+	 * any previously set properties.
 	 * @param defaultProperties the properties to set.
 	 * @return the current builder
+	 * @see SpringApplicationBuilder#properties(Properties)
+	 * @see SpringApplicationBuilder#properties(Map)
 	 */
 	public SpringApplicationBuilder properties(String... defaultProperties) {
 		return properties(getMapFromKeyValuePairs(defaultProperties));
@@ -384,8 +439,8 @@ public class SpringApplicationBuilder {
 		Map<String, Object> map = new HashMap<>();
 		for (String property : properties) {
 			int index = lowestIndexOf(property, ":", "=");
-			String key = (index > 0 ? property.substring(0, index) : property);
-			String value = (index > 0 ? property.substring(index + 1) : "");
+			String key = (index > 0) ? property.substring(0, index) : property;
+			String value = (index > 0) ? property.substring(index + 1) : "";
 			map.put(key, value);
 		}
 		return map;
@@ -396,17 +451,19 @@ public class SpringApplicationBuilder {
 		for (String candidate : candidates) {
 			int candidateIndex = property.indexOf(candidate);
 			if (candidateIndex > 0) {
-				index = (index != -1 ? Math.min(index, candidateIndex) : candidateIndex);
+				index = (index != -1) ? Math.min(index, candidateIndex) : candidateIndex;
 			}
 		}
 		return index;
 	}
 
 	/**
-	 * Default properties for the environment in the form {@code key=value} or
-	 * {@code key:value}.
+	 * Default properties for the environment.Multiple calls to this method are cumulative
+	 * and will not clear any previously set properties.
 	 * @param defaultProperties the properties to set.
 	 * @return the current builder
+	 * @see SpringApplicationBuilder#properties(String...)
+	 * @see SpringApplicationBuilder#properties(Map)
 	 */
 	public SpringApplicationBuilder properties(Properties defaultProperties) {
 		return properties(getMapFromProperties(defaultProperties));
@@ -422,10 +479,11 @@ public class SpringApplicationBuilder {
 
 	/**
 	 * Default properties for the environment. Multiple calls to this method are
-	 * cumulative.
+	 * cumulative and will not clear any previously set properties.
 	 * @param defaults the default properties
 	 * @return the current builder
 	 * @see SpringApplicationBuilder#properties(String...)
+	 * @see SpringApplicationBuilder#properties(Properties)
 	 */
 	public SpringApplicationBuilder properties(Map<String, Object> defaults) {
 		this.defaultProperties.putAll(defaults);
@@ -444,16 +502,13 @@ public class SpringApplicationBuilder {
 	 */
 	public SpringApplicationBuilder profiles(String... profiles) {
 		this.additionalProfiles.addAll(Arrays.asList(profiles));
-		this.application.setAdditionalProfiles(
-				StringUtils.toStringArray(this.additionalProfiles));
+		this.application.setAdditionalProfiles(StringUtils.toStringArray(this.additionalProfiles));
 		return this;
 	}
 
-	private SpringApplicationBuilder additionalProfiles(
-			Collection<String> additionalProfiles) {
+	private SpringApplicationBuilder additionalProfiles(Collection<String> additionalProfiles) {
 		this.additionalProfiles = new LinkedHashSet<>(additionalProfiles);
-		this.application.setAdditionalProfiles(
-				StringUtils.toStringArray(this.additionalProfiles));
+		this.application.setAdditionalProfiles(StringUtils.toStringArray(this.additionalProfiles));
 		return this;
 	}
 
@@ -463,8 +518,7 @@ public class SpringApplicationBuilder {
 	 * @param beanNameGenerator the generator to set.
 	 * @return the current builder
 	 */
-	public SpringApplicationBuilder beanNameGenerator(
-			BeanNameGenerator beanNameGenerator) {
+	public SpringApplicationBuilder beanNameGenerator(BeanNameGenerator beanNameGenerator) {
 		this.application.setBeanNameGenerator(beanNameGenerator);
 		return this;
 	}
@@ -497,8 +551,7 @@ public class SpringApplicationBuilder {
 	 * @param initializers some initializers to add
 	 * @return the current builder
 	 */
-	public SpringApplicationBuilder initializers(
-			ApplicationContextInitializer<?>... initializers) {
+	public SpringApplicationBuilder initializers(ApplicationContextInitializer<?>... initializers) {
 		this.application.addInitializers(initializers);
 		return this;
 	}
@@ -513,6 +566,18 @@ public class SpringApplicationBuilder {
 	 */
 	public SpringApplicationBuilder listeners(ApplicationListener<?>... listeners) {
 		this.application.addListeners(listeners);
+		return this;
+	}
+
+	/**
+	 * Configure the {@link ApplicationStartup} to be used with the
+	 * {@link ApplicationContext} for collecting startup metrics.
+	 * @param applicationStartup the application startup to use
+	 * @return the current builder
+	 * @since 2.4.0
+	 */
+	public SpringApplicationBuilder applicationStartup(ApplicationStartup applicationStartup) {
+		this.application.setApplicationStartup(applicationStartup);
 		return this;
 	}
 

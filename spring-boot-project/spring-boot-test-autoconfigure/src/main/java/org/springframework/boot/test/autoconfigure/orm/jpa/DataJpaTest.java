@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,23 +33,23 @@ import org.springframework.boot.test.autoconfigure.filter.TypeExcludeFilters;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.properties.PropertyMapping;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.SpringBootTestContextBootstrapper;
 import org.springframework.context.annotation.ComponentScan.Filter;
 import org.springframework.core.annotation.AliasFor;
+import org.springframework.core.env.Environment;
+import org.springframework.data.repository.config.BootstrapMode;
 import org.springframework.test.context.BootstrapWith;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Annotation that can be used in combination with {@code @RunWith(SpringRunner.class)}
- * for a typical JPA test. Can be used when a test focuses <strong>only</strong> on JPA
- * components.
+ * Annotation for a JPA test that focuses <strong>only</strong> on JPA components.
  * <p>
  * Using this annotation will disable full auto-configuration and instead apply only
  * configuration relevant to JPA tests.
  * <p>
- * By default, tests annotated with {@code @DataJpaTest} will use an embedded in-memory
- * database (replacing any explicit or usually auto-configured DataSource). The
+ * By default, tests annotated with {@code @DataJpaTest} are transactional and roll back
+ * at the end of each test. They also use an embedded in-memory database (replacing any
+ * explicit or usually auto-configured DataSource). The
  * {@link AutoConfigureTestDatabase @AutoConfigureTestDatabase} annotation can be used to
  * override these settings.
  * <p>
@@ -57,8 +57,14 @@ import org.springframework.transaction.annotation.Transactional;
  * database, you should consider {@link SpringBootTest @SpringBootTest} combined with
  * {@link AutoConfigureTestDatabase @AutoConfigureTestDatabase} rather than this
  * annotation.
+ * <p>
+ * When using JUnit 4, this annotation should be used in combination with
+ * {@code @RunWith(SpringRunner.class)}.
  *
  * @author Phillip Webb
+ * @author Artsiom Yudovin
+ * @author Scott Frederick
+ * @since 1.4.0
  * @see AutoConfigureDataJpa
  * @see AutoConfigureTestDatabase
  * @see AutoConfigureTestEntityManager
@@ -68,7 +74,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Inherited
-@BootstrapWith(SpringBootTestContextBootstrapper.class)
+@BootstrapWith(DataJpaTestContextBootstrapper.class)
 @ExtendWith(SpringExtension.class)
 @OverrideAutoConfiguration(enabled = false)
 @TypeExcludeFilters(DataJpaTypeExcludeFilter.class)
@@ -81,11 +87,27 @@ import org.springframework.transaction.annotation.Transactional;
 public @interface DataJpaTest {
 
 	/**
+	 * Properties in form {@literal key=value} that should be added to the Spring
+	 * {@link Environment} before the test runs.
+	 * @return the properties to add
+	 * @since 2.1.0
+	 */
+	String[] properties() default {};
+
+	/**
 	 * If SQL output should be logged.
 	 * @return if SQL is logged
 	 */
 	@PropertyMapping("spring.jpa.show-sql")
 	boolean showSql() default true;
+
+	/**
+	 * The {@link BootstrapMode} for the test repository support. Defaults to
+	 * {@link BootstrapMode#DEFAULT}.
+	 * @return the {@link BootstrapMode} to use for testing the repository
+	 */
+	@PropertyMapping("spring.data.jpa.repositories.bootstrap-mode")
+	BootstrapMode bootstrapMode() default BootstrapMode.DEFAULT;
 
 	/**
 	 * Determines if default filtering should be used with

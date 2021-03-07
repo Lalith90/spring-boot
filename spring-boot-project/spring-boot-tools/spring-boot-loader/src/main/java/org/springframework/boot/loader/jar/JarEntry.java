@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -32,19 +32,23 @@ import java.util.jar.Manifest;
  */
 class JarEntry extends java.util.jar.JarEntry implements FileHeader {
 
+	private final int index;
+
 	private final AsciiBytes name;
 
-	private Certificate[] certificates;
-
-	private CodeSigner[] codeSigners;
+	private final AsciiBytes headerName;
 
 	private final JarFile jarFile;
 
 	private long localHeaderOffset;
 
-	JarEntry(JarFile jarFile, CentralDirectoryFileHeader header) {
-		super(header.getName().toString());
-		this.name = header.getName();
+	private volatile JarEntryCertification certification;
+
+	JarEntry(JarFile jarFile, int index, CentralDirectoryFileHeader header, AsciiBytes nameAlias) {
+		super((nameAlias != null) ? nameAlias.toString() : header.getName().toString());
+		this.index = index;
+		this.name = (nameAlias != null) ? nameAlias : header.getName();
+		this.headerName = header.getName();
 		this.jarFile = jarFile;
 		this.localHeaderOffset = header.getLocalHeaderOffset();
 		setCompressedSize(header.getCompressedSize());
@@ -53,7 +57,13 @@ class JarEntry extends java.util.jar.JarEntry implements FileHeader {
 		setComment(header.getComment().toString());
 		setSize(header.getSize());
 		setTime(header.getTime());
-		setExtra(header.getExtra());
+		if (header.hasExtra()) {
+			setExtra(header.getExtra());
+		}
+	}
+
+	int getIndex() {
+		return this.index;
 	}
 
 	AsciiBytes getAsciiBytesName() {
@@ -62,7 +72,7 @@ class JarEntry extends java.util.jar.JarEntry implements FileHeader {
 
 	@Override
 	public boolean hasName(CharSequence name, char suffix) {
-		return this.name.matches(name, suffix);
+		return this.headerName.matches(name, suffix);
 	}
 
 	/**
@@ -77,28 +87,29 @@ class JarEntry extends java.util.jar.JarEntry implements FileHeader {
 	@Override
 	public Attributes getAttributes() throws IOException {
 		Manifest manifest = this.jarFile.getManifest();
-		return (manifest != null ? manifest.getAttributes(getName()) : null);
+		return (manifest != null) ? manifest.getAttributes(getName()) : null;
 	}
 
 	@Override
 	public Certificate[] getCertificates() {
-		if (this.jarFile.isSigned() && this.certificates == null) {
-			this.jarFile.setupEntryCertificates(this);
-		}
-		return this.certificates;
+		return getCertification().getCertificates();
 	}
 
 	@Override
 	public CodeSigner[] getCodeSigners() {
-		if (this.jarFile.isSigned() && this.codeSigners == null) {
-			this.jarFile.setupEntryCertificates(this);
-		}
-		return this.codeSigners;
+		return getCertification().getCodeSigners();
 	}
 
-	void setCertificates(java.util.jar.JarEntry entry) {
-		this.certificates = entry.getCertificates();
-		this.codeSigners = entry.getCodeSigners();
+	private JarEntryCertification getCertification() {
+		if (!this.jarFile.isSigned()) {
+			return JarEntryCertification.NONE;
+		}
+		JarEntryCertification certification = this.certification;
+		if (certification == null) {
+			certification = this.jarFile.getCertification(this);
+			this.certification = certification;
+		}
+		return certification;
 	}
 
 	@Override

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -27,6 +27,7 @@ import javax.servlet.ServletContextListener;
 import javax.servlet.ServletRequestAttributeListener;
 import javax.servlet.ServletRequestListener;
 import javax.servlet.http.HttpSessionAttributeListener;
+import javax.servlet.http.HttpSessionIdListener;
 import javax.servlet.http.HttpSessionListener;
 
 import org.springframework.util.Assert;
@@ -44,6 +45,7 @@ import org.springframework.util.ClassUtils;
  * <li>{@link ServletRequestListener}</li>
  * <li>{@link ServletRequestAttributeListener}</li>
  * <li>{@link HttpSessionAttributeListener}</li>
+ * <li>{@link HttpSessionIdListener}</li>
  * <li>{@link HttpSessionListener}</li>
  * <li>{@link ServletContextListener}</li>
  * </ul>
@@ -53,8 +55,7 @@ import org.springframework.util.ClassUtils;
  * @author Phillip Webb
  * @since 1.4.0
  */
-public class ServletListenerRegistrationBean<T extends EventListener>
-		extends RegistrationBean {
+public class ServletListenerRegistrationBean<T extends EventListener> extends RegistrationBean {
 
 	private static final Set<Class<?>> SUPPORTED_TYPES;
 
@@ -64,6 +65,7 @@ public class ServletListenerRegistrationBean<T extends EventListener>
 		types.add(ServletRequestListener.class);
 		types.add(ServletRequestAttributeListener.class);
 		types.add(HttpSessionAttributeListener.class);
+		types.add(HttpSessionIdListener.class);
 		types.add(HttpSessionListener.class);
 		types.add(ServletContextListener.class);
 		SUPPORTED_TYPES = Collections.unmodifiableSet(types);
@@ -117,9 +119,7 @@ public class ServletListenerRegistrationBean<T extends EventListener>
 			servletContext.addListener(this.listener);
 		}
 		catch (RuntimeException ex) {
-			throw new IllegalStateException(
-					"Failed to add listener '" + this.listener + "' to servlet context",
-					ex);
+			throw new IllegalStateException("Failed to add listener '" + this.listener + "' to servlet context", ex);
 		}
 	}
 

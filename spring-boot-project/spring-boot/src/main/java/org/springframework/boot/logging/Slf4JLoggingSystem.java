@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -50,13 +50,12 @@ public abstract class Slf4JLoggingSystem extends AbstractLoggingSystem {
 	public void cleanUp() {
 		if (isBridgeHandlerAvailable()) {
 			removeJdkLoggingBridgeHandler();
-			reinstateConsoleHandlerIfNecessary();
 		}
 	}
 
 	@Override
-	protected void loadConfiguration(LoggingInitializationContext initializationContext,
-			String location, LogFile logFile) {
+	protected void loadConfiguration(LoggingInitializationContext initializationContext, String location,
+			LogFile logFile) {
 		Assert.notNull(location, "Location must not be null");
 		if (initializationContext != null) {
 			applySystemProperties(initializationContext.getEnvironment(), logFile);
@@ -81,17 +80,17 @@ public abstract class Slf4JLoggingSystem extends AbstractLoggingSystem {
 	 * @since 2.0.4
 	 */
 	protected final boolean isBridgeJulIntoSlf4j() {
-		return isBridgeHandlerAvailable() && isJulUsingItsDefaultConfiguration();
+		return isBridgeHandlerAvailable() && isJulUsingASingleConsoleHandlerAtMost();
 	}
 
 	protected final boolean isBridgeHandlerAvailable() {
 		return ClassUtils.isPresent(BRIDGE_HANDLER, getClassLoader());
 	}
 
-	private boolean isJulUsingItsDefaultConfiguration() {
+	private boolean isJulUsingASingleConsoleHandlerAtMost() {
 		Logger rootLogger = LogManager.getLogManager().getLogger("");
 		Handler[] handlers = rootLogger.getHandlers();
-		return handlers.length == 1 && handlers[0] instanceof ConsoleHandler;
+		return handlers.length == 0 || (handlers.length == 1 && handlers[0] instanceof ConsoleHandler);
 	}
 
 	private void removeJdkLoggingBridgeHandler() {
@@ -114,13 +113,6 @@ public abstract class Slf4JLoggingSystem extends AbstractLoggingSystem {
 		}
 		catch (Throwable ex) {
 			// Ignore and continue
-		}
-	}
-
-	private void reinstateConsoleHandlerIfNecessary() {
-		Logger rootLogger = LogManager.getLogManager().getLogger("");
-		if (rootLogger.getHandlers().length == 0) {
-			rootLogger.addHandler(new ConsoleHandler());
 		}
 	}
 

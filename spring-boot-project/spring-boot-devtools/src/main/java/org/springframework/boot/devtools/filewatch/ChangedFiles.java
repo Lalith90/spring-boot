@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,7 +22,7 @@ import java.util.Iterator;
 import java.util.Set;
 
 /**
- * A collections of files from a specific source folder that have changed.
+ * A collections of files from a specific source directory that have changed.
  *
  * @author Phillip Webb
  * @since 1.3.0
@@ -31,21 +31,21 @@ import java.util.Set;
  */
 public final class ChangedFiles implements Iterable<ChangedFile> {
 
-	private final File sourceFolder;
+	private final File sourceDirectory;
 
 	private final Set<ChangedFile> files;
 
-	public ChangedFiles(File sourceFolder, Set<ChangedFile> files) {
-		this.sourceFolder = sourceFolder;
+	public ChangedFiles(File sourceDirectory, Set<ChangedFile> files) {
+		this.sourceDirectory = sourceDirectory;
 		this.files = Collections.unmodifiableSet(files);
 	}
 
 	/**
-	 * The source folder being watched.
-	 * @return the source folder
+	 * The source directory being watched.
+	 * @return the source directory
 	 */
-	public File getSourceFolder() {
-		return this.sourceFolder;
+	public File getSourceDirectory() {
+		return this.sourceDirectory;
 	}
 
 	@Override
@@ -62,11 +62,6 @@ public final class ChangedFiles implements Iterable<ChangedFile> {
 	}
 
 	@Override
-	public int hashCode() {
-		return this.files.hashCode();
-	}
-
-	@Override
 	public boolean equals(Object obj) {
 		if (obj == null) {
 			return false;
@@ -76,15 +71,19 @@ public final class ChangedFiles implements Iterable<ChangedFile> {
 		}
 		if (obj instanceof ChangedFiles) {
 			ChangedFiles other = (ChangedFiles) obj;
-			return this.sourceFolder.equals(other.sourceFolder)
-					&& this.files.equals(other.files);
+			return this.sourceDirectory.equals(other.sourceDirectory) && this.files.equals(other.files);
 		}
 		return super.equals(obj);
 	}
 
 	@Override
+	public int hashCode() {
+		return this.files.hashCode();
+	}
+
+	@Override
 	public String toString() {
-		return this.sourceFolder + " " + this.files;
+		return this.sourceDirectory + " " + this.files;
 	}
 
 }

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -39,6 +40,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.kafka.listener.ContainerProperties.AckMode;
 import org.springframework.kafka.security.jaas.KafkaJaasLoginModuleInitializer;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.unit.DataSize;
 
 /**
  * Configuration properties for Spring for Apache Kafka.
@@ -57,10 +59,9 @@ public class KafkaProperties {
 
 	/**
 	 * Comma-delimited list of host:port pairs to use for establishing the initial
-	 * connection to the Kafka cluster.
+	 * connections to the Kafka cluster. Applies to all components unless overridden.
 	 */
-	private List<String> bootstrapServers = new ArrayList<>(
-			Collections.singletonList("localhost:9092"));
+	private List<String> bootstrapServers = new ArrayList<>(Collections.singletonList("localhost:9092"));
 
 	/**
 	 * ID to pass to the server when making requests. Used for server-side logging.
@@ -79,6 +80,8 @@ public class KafkaProperties {
 
 	private final Admin admin = new Admin();
 
+	private final Streams streams = new Streams();
+
 	private final Listener listener = new Listener();
 
 	private final Ssl ssl = new Ssl();
@@ -86,6 +89,8 @@ public class KafkaProperties {
 	private final Jaas jaas = new Jaas();
 
 	private final Template template = new Template();
+
+	private final Security security = new Security();
 
 	public List<String> getBootstrapServers() {
 		return this.bootstrapServers;
@@ -123,6 +128,10 @@ public class KafkaProperties {
 		return this.admin;
 	}
 
+	public Streams getStreams() {
+		return this.streams;
+	}
+
 	public Ssl getSsl() {
 		return this.ssl;
 	}
@@ -135,16 +144,20 @@ public class KafkaProperties {
 		return this.template;
 	}
 
+	public Security getSecurity() {
+		return this.security;
+	}
+
 	private Map<String, Object> buildCommonProperties() {
 		Map<String, Object> properties = new HashMap<>();
 		if (this.bootstrapServers != null) {
-			properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-					this.bootstrapServers);
+			properties.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, this.bootstrapServers);
 		}
 		if (this.clientId != null) {
 			properties.put(CommonClientConfigs.CLIENT_ID_CONFIG, this.clientId);
 		}
 		properties.putAll(this.ssl.buildProperties());
+		properties.putAll(this.security.buildProperties());
 		if (!CollectionUtils.isEmpty(this.properties)) {
 			properties.putAll(this.properties);
 		}
@@ -193,9 +206,24 @@ public class KafkaProperties {
 		return properties;
 	}
 
+	/**
+	 * Create an initial map of streams properties from the state of this instance.
+	 * <p>
+	 * This allows you to add additional properties, if necessary.
+	 * @return the streams properties initialized with the customizations defined on this
+	 * instance
+	 */
+	public Map<String, Object> buildStreamsProperties() {
+		Map<String, Object> properties = buildCommonProperties();
+		properties.putAll(this.streams.buildProperties());
+		return properties;
+	}
+
 	public static class Consumer {
 
 		private final Ssl ssl = new Ssl();
+
+		private final Security security = new Security();
 
 		/**
 		 * Frequency with which the consumer offsets are auto-committed to Kafka if
@@ -211,7 +239,7 @@ public class KafkaProperties {
 
 		/**
 		 * Comma-delimited list of host:port pairs to use for establishing the initial
-		 * connection to the Kafka cluster.
+		 * connections to the Kafka cluster. Overrides the global property, for consumers.
 		 */
 		private List<String> bootstrapServers;
 
@@ -228,14 +256,14 @@ public class KafkaProperties {
 		/**
 		 * Maximum amount of time the server blocks before answering the fetch request if
 		 * there isn't sufficient data to immediately satisfy the requirement given by
-		 * "fetch.min.bytes".
+		 * "fetch-min-size".
 		 */
 		private Duration fetchMaxWait;
 
 		/**
-		 * Minimum amount of data, in bytes, the server should return for a fetch request.
+		 * Minimum amount of data the server should return for a fetch request.
 		 */
-		private Integer fetchMinSize;
+		private DataSize fetchMinSize;
 
 		/**
 		 * Unique string that identifies the consumer group to which this consumer
@@ -247,6 +275,11 @@ public class KafkaProperties {
 		 * Expected time between heartbeats to the consumer coordinator.
 		 */
 		private Duration heartbeatInterval;
+
+		/**
+		 * Isolation level for reading messages that have been written transactionally.
+		 */
+		private IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
 
 		/**
 		 * Deserializer class for keys.
@@ -270,6 +303,10 @@ public class KafkaProperties {
 
 		public Ssl getSsl() {
 			return this.ssl;
+		}
+
+		public Security getSecurity() {
+			return this.security;
 		}
 
 		public Duration getAutoCommitInterval() {
@@ -320,11 +357,11 @@ public class KafkaProperties {
 			this.fetchMaxWait = fetchMaxWait;
 		}
 
-		public Integer getFetchMinSize() {
+		public DataSize getFetchMinSize() {
 			return this.fetchMinSize;
 		}
 
-		public void setFetchMinSize(Integer fetchMinSize) {
+		public void setFetchMinSize(DataSize fetchMinSize) {
 			this.fetchMinSize = fetchMinSize;
 		}
 
@@ -342,6 +379,14 @@ public class KafkaProperties {
 
 		public void setHeartbeatInterval(Duration heartbeatInterval) {
 			this.heartbeatInterval = heartbeatInterval;
+		}
+
+		public IsolationLevel getIsolationLevel() {
+			return this.isolationLevel;
+		}
+
+		public void setIsolationLevel(IsolationLevel isolationLevel) {
+			this.isolationLevel = isolationLevel;
 		}
 
 		public Class<?> getKeyDeserializer() {
@@ -377,28 +422,23 @@ public class KafkaProperties {
 			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
 			map.from(this::getAutoCommitInterval).asInt(Duration::toMillis)
 					.to(properties.in(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-			map.from(this::getAutoOffsetReset)
-					.to(properties.in(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
-			map.from(this::getBootstrapServers)
-					.to(properties.in(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-			map.from(this::getClientId)
-					.to(properties.in(ConsumerConfig.CLIENT_ID_CONFIG));
-			map.from(this::getEnableAutoCommit)
-					.to(properties.in(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
+			map.from(this::getAutoOffsetReset).to(properties.in(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
+			map.from(this::getBootstrapServers).to(properties.in(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
+			map.from(this::getClientId).to(properties.in(ConsumerConfig.CLIENT_ID_CONFIG));
+			map.from(this::getEnableAutoCommit).to(properties.in(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG));
 			map.from(this::getFetchMaxWait).asInt(Duration::toMillis)
 					.to(properties.in(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG));
-			map.from(this::getFetchMinSize)
+			map.from(this::getFetchMinSize).asInt(DataSize::toBytes)
 					.to(properties.in(ConsumerConfig.FETCH_MIN_BYTES_CONFIG));
 			map.from(this::getGroupId).to(properties.in(ConsumerConfig.GROUP_ID_CONFIG));
 			map.from(this::getHeartbeatInterval).asInt(Duration::toMillis)
 					.to(properties.in(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG));
-			map.from(this::getKeyDeserializer)
-					.to(properties.in(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
-			map.from(this::getValueDeserializer)
-					.to(properties.in(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
-			map.from(this::getMaxPollRecords)
-					.to(properties.in(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
-			return properties.with(this.ssl, this.properties);
+			map.from(() -> getIsolationLevel().name().toLowerCase(Locale.ROOT))
+					.to(properties.in(ConsumerConfig.ISOLATION_LEVEL_CONFIG));
+			map.from(this::getKeyDeserializer).to(properties.in(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG));
+			map.from(this::getValueDeserializer).to(properties.in(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG));
+			map.from(this::getMaxPollRecords).to(properties.in(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
+			return properties.with(this.ssl, this.security, this.properties);
 		}
 
 	}
@@ -407,6 +447,8 @@ public class KafkaProperties {
 
 		private final Ssl ssl = new Ssl();
 
+		private final Security security = new Security();
+
 		/**
 		 * Number of acknowledgments the producer requires the leader to have received
 		 * before considering a request complete.
@@ -414,22 +456,22 @@ public class KafkaProperties {
 		private String acks;
 
 		/**
-		 * Default batch size in bytes. A small batch size will make batching less common
-		 * and may reduce throughput (a batch size of zero disables batching entirely).
+		 * Default batch size. A small batch size will make batching less common and may
+		 * reduce throughput (a batch size of zero disables batching entirely).
 		 */
-		private Integer batchSize;
+		private DataSize batchSize;
 
 		/**
 		 * Comma-delimited list of host:port pairs to use for establishing the initial
-		 * connection to the Kafka cluster.
+		 * connections to the Kafka cluster. Overrides the global property, for producers.
 		 */
 		private List<String> bootstrapServers;
 
 		/**
-		 * Total bytes of memory the producer can use to buffer records waiting to be sent
-		 * to the server.
+		 * Total memory size the producer can use to buffer records waiting to be sent to
+		 * the server.
 		 */
-		private Long bufferMemory;
+		private DataSize bufferMemory;
 
 		/**
 		 * ID to pass to the server when making requests. Used for server-side logging.
@@ -470,6 +512,10 @@ public class KafkaProperties {
 			return this.ssl;
 		}
 
+		public Security getSecurity() {
+			return this.security;
+		}
+
 		public String getAcks() {
 			return this.acks;
 		}
@@ -478,11 +524,11 @@ public class KafkaProperties {
 			this.acks = acks;
 		}
 
-		public Integer getBatchSize() {
+		public DataSize getBatchSize() {
 			return this.batchSize;
 		}
 
-		public void setBatchSize(Integer batchSize) {
+		public void setBatchSize(DataSize batchSize) {
 			this.batchSize = batchSize;
 		}
 
@@ -494,11 +540,11 @@ public class KafkaProperties {
 			this.bootstrapServers = bootstrapServers;
 		}
 
-		public Long getBufferMemory() {
+		public DataSize getBufferMemory() {
 			return this.bufferMemory;
 		}
 
-		public void setBufferMemory(Long bufferMemory) {
+		public void setBufferMemory(DataSize bufferMemory) {
 			this.bufferMemory = bufferMemory;
 		}
 
@@ -558,22 +604,16 @@ public class KafkaProperties {
 			Properties properties = new Properties();
 			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
 			map.from(this::getAcks).to(properties.in(ProducerConfig.ACKS_CONFIG));
-			map.from(this::getBatchSize)
-					.to(properties.in(ProducerConfig.BATCH_SIZE_CONFIG));
-			map.from(this::getBootstrapServers)
-					.to(properties.in(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-			map.from(this::getBufferMemory)
+			map.from(this::getBatchSize).asInt(DataSize::toBytes).to(properties.in(ProducerConfig.BATCH_SIZE_CONFIG));
+			map.from(this::getBootstrapServers).to(properties.in(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+			map.from(this::getBufferMemory).as(DataSize::toBytes)
 					.to(properties.in(ProducerConfig.BUFFER_MEMORY_CONFIG));
-			map.from(this::getClientId)
-					.to(properties.in(ProducerConfig.CLIENT_ID_CONFIG));
-			map.from(this::getCompressionType)
-					.to(properties.in(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-			map.from(this::getKeySerializer)
-					.to(properties.in(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
+			map.from(this::getClientId).to(properties.in(ProducerConfig.CLIENT_ID_CONFIG));
+			map.from(this::getCompressionType).to(properties.in(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+			map.from(this::getKeySerializer).to(properties.in(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG));
 			map.from(this::getRetries).to(properties.in(ProducerConfig.RETRIES_CONFIG));
-			map.from(this::getValueSerializer)
-					.to(properties.in(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
-			return properties.with(this.ssl, this.properties);
+			map.from(this::getValueSerializer).to(properties.in(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG));
+			return properties.with(this.ssl, this.security, this.properties);
 		}
 
 	}
@@ -581,6 +621,8 @@ public class KafkaProperties {
 	public static class Admin {
 
 		private final Ssl ssl = new Ssl();
+
+		private final Security security = new Security();
 
 		/**
 		 * ID to pass to the server when making requests. Used for server-side logging.
@@ -599,6 +641,10 @@ public class KafkaProperties {
 
 		public Ssl getSsl() {
 			return this.ssl;
+		}
+
+		public Security getSecurity() {
+			return this.security;
 		}
 
 		public String getClientId() {
@@ -624,9 +670,148 @@ public class KafkaProperties {
 		public Map<String, Object> buildProperties() {
 			Properties properties = new Properties();
 			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
-			map.from(this::getClientId)
-					.to(properties.in(ProducerConfig.CLIENT_ID_CONFIG));
-			return properties.with(this.ssl, this.properties);
+			map.from(this::getClientId).to(properties.in(ProducerConfig.CLIENT_ID_CONFIG));
+			return properties.with(this.ssl, this.security, this.properties);
+		}
+
+	}
+
+	/**
+	 * High (and some medium) priority Streams properties and a general properties bucket.
+	 */
+	public static class Streams {
+
+		private final Ssl ssl = new Ssl();
+
+		private final Security security = new Security();
+
+		private final Cleanup cleanup = new Cleanup();
+
+		/**
+		 * Kafka streams application.id property; default spring.application.name.
+		 */
+		private String applicationId;
+
+		/**
+		 * Whether or not to auto-start the streams factory bean.
+		 */
+		private boolean autoStartup = true;
+
+		/**
+		 * Comma-delimited list of host:port pairs to use for establishing the initial
+		 * connections to the Kafka cluster. Overrides the global property, for streams.
+		 */
+		private List<String> bootstrapServers;
+
+		/**
+		 * Maximum memory size to be used for buffering across all threads.
+		 */
+		private DataSize cacheMaxSizeBuffering;
+
+		/**
+		 * ID to pass to the server when making requests. Used for server-side logging.
+		 */
+		private String clientId;
+
+		/**
+		 * The replication factor for change log topics and repartition topics created by
+		 * the stream processing application.
+		 */
+		private Integer replicationFactor;
+
+		/**
+		 * Directory location for the state store.
+		 */
+		private String stateDir;
+
+		/**
+		 * Additional Kafka properties used to configure the streams.
+		 */
+		private final Map<String, String> properties = new HashMap<>();
+
+		public Ssl getSsl() {
+			return this.ssl;
+		}
+
+		public Security getSecurity() {
+			return this.security;
+		}
+
+		public Cleanup getCleanup() {
+			return this.cleanup;
+		}
+
+		public String getApplicationId() {
+			return this.applicationId;
+		}
+
+		public void setApplicationId(String applicationId) {
+			this.applicationId = applicationId;
+		}
+
+		public boolean isAutoStartup() {
+			return this.autoStartup;
+		}
+
+		public void setAutoStartup(boolean autoStartup) {
+			this.autoStartup = autoStartup;
+		}
+
+		public List<String> getBootstrapServers() {
+			return this.bootstrapServers;
+		}
+
+		public void setBootstrapServers(List<String> bootstrapServers) {
+			this.bootstrapServers = bootstrapServers;
+		}
+
+		public DataSize getCacheMaxSizeBuffering() {
+			return this.cacheMaxSizeBuffering;
+		}
+
+		public void setCacheMaxSizeBuffering(DataSize cacheMaxSizeBuffering) {
+			this.cacheMaxSizeBuffering = cacheMaxSizeBuffering;
+		}
+
+		public String getClientId() {
+			return this.clientId;
+		}
+
+		public void setClientId(String clientId) {
+			this.clientId = clientId;
+		}
+
+		public Integer getReplicationFactor() {
+			return this.replicationFactor;
+		}
+
+		public void setReplicationFactor(Integer replicationFactor) {
+			this.replicationFactor = replicationFactor;
+		}
+
+		public String getStateDir() {
+			return this.stateDir;
+		}
+
+		public void setStateDir(String stateDir) {
+			this.stateDir = stateDir;
+		}
+
+		public Map<String, String> getProperties() {
+			return this.properties;
+		}
+
+		public Map<String, Object> buildProperties() {
+			Properties properties = new Properties();
+			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+			map.from(this::getApplicationId).to(properties.in("application.id"));
+			map.from(this::getBootstrapServers).to(properties.in(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG));
+			map.from(this::getCacheMaxSizeBuffering).asInt(DataSize::toBytes)
+					.to(properties.in("cache.max.bytes.buffering"));
+			map.from(this::getClientId).to(properties.in(CommonClientConfigs.CLIENT_ID_CONFIG));
+			map.from(this::getReplicationFactor).to(properties.in("replication.factor"));
+			map.from(this::getStateDir).to(properties.in("state.dir"));
+			return properties.with(this.ssl, this.security, this.properties);
 		}
 
 	}
@@ -707,6 +892,11 @@ public class KafkaProperties {
 		private Duration ackTime;
 
 		/**
+		 * Sleep interval between Consumer.poll(Duration) calls.
+		 */
+		private Duration idleBetweenPolls = Duration.ZERO;
+
+		/**
 		 * Time between publishing idle consumer events (no data received).
 		 */
 		private Duration idleEventInterval;
@@ -722,6 +912,18 @@ public class KafkaProperties {
 		 * Whether to log the container configuration during initialization (INFO level).
 		 */
 		private Boolean logContainerConfig;
+
+		/**
+		 * Whether to suppress the entire record from being written to the log when
+		 * retries are being attempted.
+		 */
+		private boolean onlyLogRecordMetadata = true;
+
+		/**
+		 * Whether the container should fail to start if at least one of the configured
+		 * topics are not present on the broker.
+		 */
+		private boolean missingTopicsFatal = false;
 
 		public Type getType() {
 			return this.type;
@@ -787,6 +989,14 @@ public class KafkaProperties {
 			this.ackTime = ackTime;
 		}
 
+		public Duration getIdleBetweenPolls() {
+			return this.idleBetweenPolls;
+		}
+
+		public void setIdleBetweenPolls(Duration idleBetweenPolls) {
+			this.idleBetweenPolls = idleBetweenPolls;
+		}
+
 		public Duration getIdleEventInterval() {
 			return this.idleEventInterval;
 		}
@@ -809,6 +1019,22 @@ public class KafkaProperties {
 
 		public void setLogContainerConfig(Boolean logContainerConfig) {
 			this.logContainerConfig = logContainerConfig;
+		}
+
+		public boolean isOnlyLogRecordMetadata() {
+			return this.onlyLogRecordMetadata;
+		}
+
+		public void setOnlyLogRecordMetadata(boolean onlyLogRecordMetadata) {
+			this.onlyLogRecordMetadata = onlyLogRecordMetadata;
+		}
+
+		public boolean isMissingTopicsFatal() {
+			return this.missingTopicsFatal;
+		}
+
+		public void setMissingTopicsFatal(boolean missingTopicsFatal) {
+			this.missingTopicsFatal = missingTopicsFatal;
 		}
 
 	}
@@ -922,20 +1148,15 @@ public class KafkaProperties {
 		public Map<String, Object> buildProperties() {
 			Properties properties = new Properties();
 			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
-			map.from(this::getKeyPassword)
-					.to(properties.in(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
+			map.from(this::getKeyPassword).to(properties.in(SslConfigs.SSL_KEY_PASSWORD_CONFIG));
 			map.from(this::getKeyStoreLocation).as(this::resourceToPath)
 					.to(properties.in(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
-			map.from(this::getKeyStorePassword)
-					.to(properties.in(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
-			map.from(this::getKeyStoreType)
-					.to(properties.in(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG));
+			map.from(this::getKeyStorePassword).to(properties.in(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG));
+			map.from(this::getKeyStoreType).to(properties.in(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG));
 			map.from(this::getTrustStoreLocation).as(this::resourceToPath)
 					.to(properties.in(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-			map.from(this::getTrustStorePassword)
-					.to(properties.in(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
-			map.from(this::getTrustStoreType)
-					.to(properties.in(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
+			map.from(this::getTrustStorePassword).to(properties.in(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+			map.from(this::getTrustStoreType).to(properties.in(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG));
 			map.from(this::getProtocol).to(properties.in(SslConfigs.SSL_PROTOCOL_CONFIG));
 			return properties;
 		}
@@ -945,8 +1166,7 @@ public class KafkaProperties {
 				return resource.getFile().getAbsolutePath();
 			}
 			catch (IOException ex) {
-				throw new IllegalStateException(
-						"Resource '" + resource + "' must be on a file system", ex);
+				throw new IllegalStateException("Resource '" + resource + "' must be on a file system", ex);
 			}
 		}
 
@@ -994,8 +1214,7 @@ public class KafkaProperties {
 			return this.controlFlag;
 		}
 
-		public void setControlFlag(
-				KafkaJaasLoginModuleInitializer.ControlFlag controlFlag) {
+		public void setControlFlag(KafkaJaasLoginModuleInitializer.ControlFlag controlFlag) {
 			this.controlFlag = controlFlag;
 		}
 
@@ -1011,14 +1230,95 @@ public class KafkaProperties {
 
 	}
 
+	public static class Security {
+
+		/**
+		 * Security protocol used to communicate with brokers.
+		 */
+		private String protocol;
+
+		public String getProtocol() {
+			return this.protocol;
+		}
+
+		public void setProtocol(String protocol) {
+			this.protocol = protocol;
+		}
+
+		public Map<String, Object> buildProperties() {
+			Properties properties = new Properties();
+			PropertyMapper map = PropertyMapper.get().alwaysApplyingWhenNonNull();
+			map.from(this::getProtocol).to(properties.in(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
+			return properties;
+		}
+
+	}
+
+	public static class Cleanup {
+
+		/**
+		 * Cleanup the application’s local state directory on startup.
+		 */
+		private boolean onStartup = false;
+
+		/**
+		 * Cleanup the application’s local state directory on shutdown.
+		 */
+		private boolean onShutdown = true;
+
+		public boolean isOnStartup() {
+			return this.onStartup;
+		}
+
+		public void setOnStartup(boolean onStartup) {
+			this.onStartup = onStartup;
+		}
+
+		public boolean isOnShutdown() {
+			return this.onShutdown;
+		}
+
+		public void setOnShutdown(boolean onShutdown) {
+			this.onShutdown = onShutdown;
+		}
+
+	}
+
+	public enum IsolationLevel {
+
+		/**
+		 * Read everything including aborted transactions.
+		 */
+		READ_UNCOMMITTED((byte) 0),
+
+		/**
+		 * Read records from committed transactions, in addition to records not part of
+		 * transactions.
+		 */
+		READ_COMMITTED((byte) 1);
+
+		private final byte id;
+
+		IsolationLevel(byte id) {
+			this.id = id;
+		}
+
+		public byte id() {
+			return this.id;
+		}
+
+	}
+
+	@SuppressWarnings("serial")
 	private static class Properties extends HashMap<String, Object> {
 
-		public <V> java.util.function.Consumer<V> in(String key) {
+		<V> java.util.function.Consumer<V> in(String key) {
 			return (value) -> put(key, value);
 		}
 
-		public Properties with(Ssl ssl, Map<String, String> properties) {
+		Properties with(Ssl ssl, Security security, Map<String, String> properties) {
 			putAll(ssl.buildProperties());
+			putAll(security.buildProperties());
 			putAll(properties);
 			return this;
 		}

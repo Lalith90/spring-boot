@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,28 +16,28 @@
 
 package org.springframework.boot.autoconfigure.security.servlet;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.BeanIds;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 
 /**
- * If there is a bean of type WebSecurityConfigurerAdapter, this adds the
- * {@link EnableWebSecurity} annotation. This will make sure that the annotation is
- * present with default security auto-configuration and also if the user adds custom
- * security and forgets to add the annotation. If {@link EnableWebSecurity} has already
- * been added or if a bean with name {@value BeanIds#SPRING_SECURITY_FILTER_CHAIN} has
- * been configured by the user, this will back-off.
+ * Adds the{@link EnableWebSecurity @EnableWebSecurity} annotation if Spring Security is
+ * on the classpath. This will make sure that the annotation is present with default
+ * security auto-configuration and also if the user adds custom security and forgets to
+ * add the annotation. If {@link EnableWebSecurity @EnableWebSecurity} has already been
+ * added or if a bean with name {@value BeanIds#SPRING_SECURITY_FILTER_CHAIN} has been
+ * configured by the user, this will back-off.
  *
  * @author Madhura Bhave
- * @since 2.0.0
  */
-@ConditionalOnBean(WebSecurityConfigurerAdapter.class)
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnMissingBean(name = BeanIds.SPRING_SECURITY_FILTER_CHAIN)
+@ConditionalOnClass(EnableWebSecurity.class)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableWebSecurity
-public class WebSecurityEnablerConfiguration {
+class WebSecurityEnablerConfiguration {
 
 }

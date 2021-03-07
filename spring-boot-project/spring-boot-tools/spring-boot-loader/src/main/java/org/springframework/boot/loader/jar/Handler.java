@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,11 +19,10 @@ package org.springframework.boot.loader.jar;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.SoftReference;
-import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLConnection;
-import java.net.URLDecoder;
 import java.net.URLStreamHandler;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -36,6 +35,7 @@ import java.util.regex.Pattern;
  *
  * @author Phillip Webb
  * @author Andy Wilkinson
+ * @since 1.0.0
  * @see JarFile#registerUrlProtocolHandler()
  */
 public class Handler extends URLStreamHandler {
@@ -47,30 +47,23 @@ public class Handler extends URLStreamHandler {
 
 	private static final String FILE_PROTOCOL = "file:";
 
+	private static final String TOMCAT_WARFILE_PROTOCOL = "war:file:";
+
 	private static final String SEPARATOR = "!/";
+
+	private static final Pattern SEPARATOR_PATTERN = Pattern.compile(SEPARATOR, Pattern.LITERAL);
 
 	private static final String CURRENT_DIR = "/./";
 
-	private static final Pattern CURRENT_DIR_PATTERN = Pattern.compile(CURRENT_DIR);
+	private static final Pattern CURRENT_DIR_PATTERN = Pattern.compile(CURRENT_DIR, Pattern.LITERAL);
 
 	private static final String PARENT_DIR = "/../";
 
-	private static final String[] FALLBACK_HANDLERS = {
-			"sun.net.www.protocol.jar.Handler" };
+	private static final String PROTOCOL_HANDLER = "java.protocol.handler.pkgs";
 
-	private static final Method OPEN_CONNECTION_METHOD;
+	private static final String[] FALLBACK_HANDLERS = { "sun.net.www.protocol.jar.Handler" };
 
-	static {
-		Method method = null;
-		try {
-			method = URLStreamHandler.class.getDeclaredMethod("openConnection",
-					URL.class);
-		}
-		catch (Exception ex) {
-			// Swallow and ignore
-		}
-		OPEN_CONNECTION_METHOD = method;
-	}
+	private static URL jarContextUrl;
 
 	private static SoftReference<Map<File, JarFile>> rootFileCache;
 
@@ -92,8 +85,7 @@ public class Handler extends URLStreamHandler {
 
 	@Override
 	protected URLConnection openConnection(URL url) throws IOException {
-		if (this.jarFile != null
-				&& url.toString().startsWith(this.jarFile.getUrl().toString())) {
+		if (this.jarFile != null && isUrlInJarFile(url, this.jarFile)) {
 			return JarURLConnection.get(url, this.jarFile);
 		}
 		try {
@@ -104,10 +96,17 @@ public class Handler extends URLStreamHandler {
 		}
 	}
 
-	private URLConnection openFallbackConnection(URL url, Exception reason)
-			throws IOException {
+	private boolean isUrlInJarFile(URL url, JarFile jarFile) throws MalformedURLException {
+		// Try the path first to save building a new url string each time
+		return url.getPath().startsWith(jarFile.getUrl().getPath())
+				&& url.toString().startsWith(jarFile.getUrlString());
+	}
+
+	private URLConnection openFallbackConnection(URL url, Exception reason) throws IOException {
 		try {
-			return openConnection(getFallbackHandler(), url);
+			URLConnection connection = openFallbackTomcatConnection(url);
+			connection = (connection != null) ? connection : openFallbackContextConnection(url);
+			return (connection != null) ? connection : openFallbackHandlerConnection(url);
 		}
 		catch (Exception ex) {
 			if (reason instanceof IOException) {
@@ -122,16 +121,73 @@ public class Handler extends URLStreamHandler {
 		}
 	}
 
-	private void log(boolean warning, String message, Exception cause) {
-		try {
-			Logger.getLogger(getClass().getName())
-					.log((warning ? Level.WARNING : Level.FINEST), message, cause);
-		}
-		catch (Exception ex) {
-			if (warning) {
-				System.err.println("WARNING: " + message);
+	/**
+	 * Attempt to open a Tomcat formatted 'jar:war:file:...' URL. This method allows us to
+	 * use our own nested JAR support to open the content rather than the logic in
+	 * {@code sun.net.www.protocol.jar.URLJarFile} which will extract the nested jar to
+	 * the temp folder to that its content can be accessed.
+	 * @param url the URL to open
+	 * @return a {@link URLConnection} or {@code null}
+	 */
+	private URLConnection openFallbackTomcatConnection(URL url) {
+		String file = url.getFile();
+		if (isTomcatWarUrl(file)) {
+			file = file.substring(TOMCAT_WARFILE_PROTOCOL.length());
+			file = file.replaceFirst("\\*/", "!/");
+			try {
+				URLConnection connection = openConnection(new URL("jar:file:" + file));
+				connection.getInputStream().close();
+				return connection;
+			}
+			catch (IOException ex) {
 			}
 		}
+		return null;
+	}
+
+	private boolean isTomcatWarUrl(String file) {
+		if (file.startsWith(TOMCAT_WARFILE_PROTOCOL) || !file.contains("*/")) {
+			try {
+				URLConnection connection = new URL(file).openConnection();
+				if (connection.getClass().getName().startsWith("org.apache.catalina")) {
+					return true;
+				}
+			}
+			catch (Exception ex) {
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Attempt to open a fallback connection by using a context URL captured before the
+	 * jar handler was replaced with our own version. Since this method doesn't use
+	 * reflection it won't trigger "illegal reflective access operation has occurred"
+	 * warnings on Java 13+.
+	 * @param url the URL to open
+	 * @return a {@link URLConnection} or {@code null}
+	 */
+	private URLConnection openFallbackContextConnection(URL url) {
+		try {
+			if (jarContextUrl != null) {
+				return new URL(jarContextUrl, url.toExternalForm()).openConnection();
+			}
+		}
+		catch (Exception ex) {
+		}
+		return null;
+	}
+
+	/**
+	 * Attempt to open a fallback connection by using reflection to access Java's default
+	 * jar {@link URLStreamHandler}.
+	 * @param url the URL to open
+	 * @return the {@link URLConnection}
+	 * @throws Exception if not connection could be opened
+	 */
+	private URLConnection openFallbackHandlerConnection(URL url) throws Exception {
+		URLStreamHandler fallbackHandler = getFallbackHandler();
+		return new URL(null, url.toExternalForm(), fallbackHandler).openConnection();
 	}
 
 	private URLStreamHandler getFallbackHandler() {
@@ -141,7 +197,7 @@ public class Handler extends URLStreamHandler {
 		for (String handlerClassName : FALLBACK_HANDLERS) {
 			try {
 				Class<?> handlerClass = Class.forName(handlerClassName);
-				this.fallbackHandler = (URLStreamHandler) handlerClass.newInstance();
+				this.fallbackHandler = (URLStreamHandler) handlerClass.getDeclaredConstructor().newInstance();
 				return this.fallbackHandler;
 			}
 			catch (Exception ex) {
@@ -151,14 +207,16 @@ public class Handler extends URLStreamHandler {
 		throw new IllegalStateException("Unable to find fallback handler");
 	}
 
-	private URLConnection openConnection(URLStreamHandler handler, URL url)
-			throws Exception {
-		if (OPEN_CONNECTION_METHOD == null) {
-			throw new IllegalStateException(
-					"Unable to invoke fallback open connection method");
+	private void log(boolean warning, String message, Exception cause) {
+		try {
+			Level level = warning ? Level.WARNING : Level.FINEST;
+			Logger.getLogger(getClass().getName()).log(level, message, cause);
 		}
-		OPEN_CONNECTION_METHOD.setAccessible(true);
-		return (URLConnection) OPEN_CONNECTION_METHOD.invoke(handler, url);
+		catch (Exception ex) {
+			if (warning) {
+				System.err.println("WARNING: " + message);
+			}
+		}
 	}
 
 	@Override
@@ -195,8 +253,7 @@ public class Handler extends URLStreamHandler {
 		}
 		int lastSlashIndex = file.lastIndexOf('/');
 		if (lastSlashIndex == -1) {
-			throw new IllegalArgumentException(
-					"No / found in context URL's file '" + file + "'");
+			throw new IllegalArgumentException("No / found in context URL's file '" + file + "'");
 		}
 		return file.substring(0, lastSlashIndex + 1) + spec;
 	}
@@ -204,14 +261,20 @@ public class Handler extends URLStreamHandler {
 	private String trimToJarRoot(String file) {
 		int lastSeparatorIndex = file.lastIndexOf(SEPARATOR);
 		if (lastSeparatorIndex == -1) {
-			throw new IllegalArgumentException(
-					"No !/ found in context URL's file '" + file + "'");
+			throw new IllegalArgumentException("No !/ found in context URL's file '" + file + "'");
 		}
 		return file.substring(0, lastSeparatorIndex);
 	}
 
 	private void setFile(URL context, String file) {
-		setURL(context, JAR_PROTOCOL, null, -1, null, null, normalize(file), null, null);
+		String path = normalize(file);
+		String query = null;
+		int queryIndex = path.lastIndexOf('?');
+		if (queryIndex != -1) {
+			query = path.substring(queryIndex + 1);
+			path = path.substring(0, queryIndex);
+		}
+		setURL(context, JAR_PROTOCOL, null, -1, null, null, path, query, context.getRef());
 	}
 
 	private String normalize(String file) {
@@ -230,8 +293,7 @@ public class Handler extends URLStreamHandler {
 		while ((parentDirIndex = file.indexOf(PARENT_DIR)) >= 0) {
 			int precedingSlashIndex = file.lastIndexOf('/', parentDirIndex - 1);
 			if (precedingSlashIndex >= 0) {
-				file = file.substring(0, precedingSlashIndex)
-						+ file.substring(parentDirIndex + 3);
+				file = file.substring(0, precedingSlashIndex) + file.substring(parentDirIndex + 3);
 			}
 			else {
 				file = file.substring(parentDirIndex + 4);
@@ -250,7 +312,7 @@ public class Handler extends URLStreamHandler {
 	}
 
 	private int hashCode(String protocol, String file) {
-		int result = (protocol != null ? protocol.hashCode() : 0);
+		int result = (protocol != null) ? protocol.hashCode() : 0;
 		int separatorIndex = file.indexOf(SEPARATOR);
 		if (separatorIndex == -1) {
 			return result + file.hashCode();
@@ -298,7 +360,7 @@ public class Handler extends URLStreamHandler {
 	}
 
 	private String canonicalize(String path) {
-		return path.replace(SEPARATOR, "/");
+		return SEPARATOR_PATTERN.matcher(path).replaceAll("/");
 	}
 
 	public JarFile getRootJarFileFromUrl(URL url) throws IOException {
@@ -316,10 +378,9 @@ public class Handler extends URLStreamHandler {
 			if (!name.startsWith(FILE_PROTOCOL)) {
 				throw new IllegalStateException("Not a file URL");
 			}
-			String path = name.substring(FILE_PROTOCOL.length());
-			File file = new File(URLDecoder.decode(path, "UTF-8"));
+			File file = new File(URI.create(name));
 			Map<File, JarFile> cache = rootFileCache.get();
-			JarFile result = (cache != null ? cache.get(file) : null);
+			JarFile result = (cache != null) ? cache.get(file) : null;
 			if (result == null) {
 				result = new JarFile(file);
 				addToRootFileCache(file, result);
@@ -346,13 +407,59 @@ public class Handler extends URLStreamHandler {
 	}
 
 	/**
+	 * If possible, capture a URL that is configured with the original jar handler so that
+	 * we can use it as a fallback context later. We can only do this if we know that we
+	 * can reset the handlers after.
+	 */
+	static void captureJarContextUrl() {
+		if (canResetCachedUrlHandlers()) {
+			String handlers = System.getProperty(PROTOCOL_HANDLER, "");
+			try {
+				System.clearProperty(PROTOCOL_HANDLER);
+				try {
+					resetCachedUrlHandlers();
+					jarContextUrl = new URL("jar:file:context.jar!/");
+					URLConnection connection = jarContextUrl.openConnection();
+					if (connection instanceof JarURLConnection) {
+						jarContextUrl = null;
+					}
+				}
+				catch (Exception ex) {
+				}
+			}
+			finally {
+				if (handlers == null) {
+					System.clearProperty(PROTOCOL_HANDLER);
+				}
+				else {
+					System.setProperty(PROTOCOL_HANDLER, handlers);
+				}
+			}
+			resetCachedUrlHandlers();
+		}
+	}
+
+	private static boolean canResetCachedUrlHandlers() {
+		try {
+			resetCachedUrlHandlers();
+			return true;
+		}
+		catch (Error ex) {
+			return false;
+		}
+	}
+
+	private static void resetCachedUrlHandlers() {
+		URL.setURLStreamHandlerFactory(null);
+	}
+
+	/**
 	 * Set if a generic static exception can be thrown when a URL cannot be connected.
 	 * This optimization is used during class loading to save creating lots of exceptions
 	 * which are then swallowed.
 	 * @param useFastConnectionExceptions if fast connection exceptions can be used.
 	 */
-	public static void setUseFastConnectionExceptions(
-			boolean useFastConnectionExceptions) {
+	public static void setUseFastConnectionExceptions(boolean useFastConnectionExceptions) {
 		JarURLConnection.setUseFastExceptions(useFastConnectionExceptions);
 	}
 

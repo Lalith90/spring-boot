@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,12 +17,16 @@
 package org.springframework.boot.actuate.autoconfigure.metrics.amqp;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.boot.actuate.autoconfigure.metrics.test.MetricsRun;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,14 +35,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * @author Stephane Nicoll
  */
-public class RabbitMetricsAutoConfigurationTests {
+class RabbitMetricsAutoConfigurationTests {
 
-	private ApplicationContextRunner contextRunner = new ApplicationContextRunner()
-			.with(MetricsRun.simple())
-			.withConfiguration(AutoConfigurations.of(RabbitAutoConfiguration.class));
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner().with(MetricsRun.simple())
+			.withConfiguration(
+					AutoConfigurations.of(RabbitAutoConfiguration.class, RabbitMetricsAutoConfiguration.class));
 
 	@Test
-	public void autoConfiguredConnectionFactoryIsInstrumented() {
+	void autoConfiguredConnectionFactoryIsInstrumented() {
 		this.contextRunner.run((context) -> {
 			MeterRegistry registry = context.getBean(MeterRegistry.class);
 			registry.get("rabbitmq.connections").meter();
@@ -46,12 +50,30 @@ public class RabbitMetricsAutoConfigurationTests {
 	}
 
 	@Test
-	public void rabbitmqNativeConnectionFactoryInstrumentationCanBeDisabled() {
-		this.contextRunner.withPropertyValues("management.metrics.enable.rabbitmq=false")
-				.run((context) -> {
-					MeterRegistry registry = context.getBean(MeterRegistry.class);
-					assertThat(registry.find("rabbitmq.connections").meter()).isNull();
-				});
+	void abstractConnectionFactoryDefinedAsAConnectionFactoryIsInstrumented() {
+		this.contextRunner.withUserConfiguration(ConnectionFactoryConfiguration.class).run((context) -> {
+			assertThat(context).hasBean("customConnectionFactory");
+			MeterRegistry registry = context.getBean(MeterRegistry.class);
+			registry.get("rabbitmq.connections").meter();
+		});
+	}
+
+	@Test
+	void rabbitmqNativeConnectionFactoryInstrumentationCanBeDisabled() {
+		this.contextRunner.withPropertyValues("management.metrics.enable.rabbitmq=false").run((context) -> {
+			MeterRegistry registry = context.getBean(MeterRegistry.class);
+			assertThat(registry.find("rabbitmq.connections").meter()).isNull();
+		});
+	}
+
+	@Configuration
+	static class ConnectionFactoryConfiguration {
+
+		@Bean
+		ConnectionFactory customConnectionFactory() {
+			return new CachingConnectionFactory();
+		}
+
 	}
 
 }

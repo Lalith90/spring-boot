@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,182 +16,157 @@
 
 package org.springframework.boot.autoconfigure.data.neo4j;
 
-import org.junit.Test;
-import org.neo4j.ogm.session.Session;
-import org.neo4j.ogm.session.SessionFactory;
-import org.neo4j.ogm.session.event.Event;
-import org.neo4j.ogm.session.event.EventListener;
-import org.neo4j.ogm.session.event.PersistenceEvent;
+import org.junit.jupiter.api.Test;
 
-import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
-import org.springframework.boot.autoconfigure.data.neo4j.city.City;
-import org.springframework.boot.autoconfigure.data.neo4j.country.Country;
-import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.boot.autoconfigure.transaction.TransactionAutoConfiguration;
-import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.boot.autoconfigure.TestAutoConfigurationPackage;
+import org.springframework.boot.autoconfigure.data.neo4j.scan.TestNode;
+import org.springframework.boot.autoconfigure.data.neo4j.scan.TestNonAnnotated;
+import org.springframework.boot.autoconfigure.data.neo4j.scan.TestPersistent;
+import org.springframework.boot.autoconfigure.data.neo4j.scan.TestRelationshipProperties;
+import org.springframework.boot.autoconfigure.neo4j.Neo4jAutoConfiguration;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.data.neo4j.mapping.Neo4jMappingContext;
-import org.springframework.data.neo4j.transaction.Neo4jTransactionManager;
-import org.springframework.data.neo4j.web.support.OpenSessionInViewInterceptor;
+import org.springframework.data.neo4j.core.DatabaseSelection;
+import org.springframework.data.neo4j.core.DatabaseSelectionProvider;
+import org.springframework.data.neo4j.core.Neo4jClient;
+import org.springframework.data.neo4j.core.Neo4jOperations;
+import org.springframework.data.neo4j.core.Neo4jTemplate;
+import org.springframework.data.neo4j.core.convert.Neo4jConversions;
+import org.springframework.data.neo4j.core.mapping.Neo4jMappingContext;
+import org.springframework.data.neo4j.core.transaction.Neo4jTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.ReactiveTransactionManager;
+import org.springframework.transaction.TransactionManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 /**
- * Tests for {@link Neo4jDataAutoConfiguration}. Tests can't use the embedded driver as we
- * use Lucene 4 and Neo4j still requires 3.
+ * Tests for {@link Neo4jDataAutoConfiguration}.
  *
  * @author Stephane Nicoll
  * @author Michael Hunger
  * @author Vince Bickers
  * @author Andy Wilkinson
  * @author Kazuki Shimizu
+ * @author Michael J. Simons
  */
-public class Neo4jDataAutoConfigurationTests {
+class Neo4jDataAutoConfigurationTests {
 
-	private WebApplicationContextRunner contextRunner = new WebApplicationContextRunner()
-			.withUserConfiguration(TestConfiguration.class)
-			.withConfiguration(AutoConfigurations.of(Neo4jDataAutoConfiguration.class,
-					TransactionAutoConfiguration.class));
+	private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
+			.withUserConfiguration(MockedDriverConfiguration.class)
+			.withConfiguration(AutoConfigurations.of(Neo4jAutoConfiguration.class, Neo4jDataAutoConfiguration.class));
 
 	@Test
-	public void defaultConfiguration() {
+	void shouldProvideConversions() {
+		this.contextRunner.run((context) -> assertThat(context).hasSingleBean(Neo4jConversions.class));
+	}
+
+	@Test
+	void shouldProvideDefaultDatabaseNameProvider() {
+		this.contextRunner.run((context) -> {
+			assertThat(context).hasSingleBean(DatabaseSelectionProvider.class);
+			assertThat(context.getBean(DatabaseSelectionProvider.class))
+					.isSameAs(DatabaseSelectionProvider.getDefaultSelectionProvider());
+		});
+	}
+
+	@Test
+	void shouldUseDatabaseNameIfSet() {
+		this.contextRunner.withPropertyValues("spring.data.neo4j.database=test").run((context) -> {
+			assertThat(context).hasSingleBean(DatabaseSelectionProvider.class);
+			assertThat(context.getBean(DatabaseSelectionProvider.class).getDatabaseSelection())
+					.isEqualTo(DatabaseSelection.byName("test"));
+		});
+	}
+
+	@Test
+	void shouldReuseExistingDatabaseNameProvider() {
+		this.contextRunner.withPropertyValues("spring.data.neo4j.database=ignored")
+				.withUserConfiguration(CustomDatabaseSelectionProviderConfiguration.class).run((context) -> {
+					assertThat(context).hasSingleBean(DatabaseSelectionProvider.class);
+					assertThat(context.getBean(DatabaseSelectionProvider.class).getDatabaseSelection())
+							.isEqualTo(DatabaseSelection.byName("custom"));
+				});
+	}
+
+	@Test
+	void shouldProvideNeo4jClient() {
+		this.contextRunner.run((context) -> assertThat(context).hasSingleBean(Neo4jClient.class));
+	}
+
+	@Test
+	void shouldReuseExistingNeo4jClient() {
+		this.contextRunner.withBean("myCustomClient", Neo4jClient.class, () -> mock(Neo4jClient.class))
+				.run((context) -> assertThat(context).hasSingleBean(Neo4jClient.class).hasBean("myCustomClient"));
+	}
+
+	@Test
+	void shouldProvideNeo4jTemplate() {
+		this.contextRunner.withUserConfiguration(CustomDatabaseSelectionProviderConfiguration.class).run((context) -> {
+			assertThat(context).hasSingleBean(Neo4jTemplate.class);
+			assertThat(context.getBean(Neo4jTemplate.class)).extracting("databaseSelectionProvider")
+					.isSameAs(context.getBean(DatabaseSelectionProvider.class));
+		});
+	}
+
+	@Test
+	void shouldReuseExistingNeo4jTemplate() {
+		this.contextRunner.withBean("myCustomOperations", Neo4jOperations.class, () -> mock(Neo4jOperations.class)).run(
+				(context) -> assertThat(context).hasSingleBean(Neo4jOperations.class).hasBean("myCustomOperations"));
+	}
+
+	@Test
+	void shouldProvideTransactionManager() {
+		this.contextRunner.withUserConfiguration(CustomDatabaseSelectionProviderConfiguration.class).run((context) -> {
+			assertThat(context).hasSingleBean(Neo4jTransactionManager.class);
+			assertThat(context.getBean(Neo4jTransactionManager.class)).extracting("databaseSelectionProvider")
+					.isSameAs(context.getBean(DatabaseSelectionProvider.class));
+		});
+	}
+
+	@Test
+	void shouldBackoffIfReactiveTransactionManagerIsSet() {
+		this.contextRunner.withBean(ReactiveTransactionManager.class, () -> mock(ReactiveTransactionManager.class))
+				.run((context) -> assertThat(context).doesNotHaveBean(Neo4jTransactionManager.class)
+						.hasSingleBean(TransactionManager.class));
+	}
+
+	@Test
+	void shouldReuseExistingTransactionManager() {
 		this.contextRunner
-				.withPropertyValues("spring.data.neo4j.uri=http://localhost:8989")
-				.run((context) -> {
-					assertThat(context)
-							.hasSingleBean(org.neo4j.ogm.config.Configuration.class);
-					assertThat(context).hasSingleBean(SessionFactory.class);
-					assertThat(context).hasSingleBean(Neo4jTransactionManager.class);
-					assertThat(context).hasSingleBean(OpenSessionInViewInterceptor.class);
-				});
+				.withBean("myCustomTransactionManager", PlatformTransactionManager.class,
+						() -> mock(PlatformTransactionManager.class))
+				.run((context) -> assertThat(context).hasSingleBean(PlatformTransactionManager.class)
+						.hasBean("myCustomTransactionManager"));
 	}
 
 	@Test
-	public void customNeo4jTransactionManagerUsingProperties() {
-		this.contextRunner
-				.withPropertyValues("spring.transaction.default-timeout=30",
-						"spring.transaction.rollback-on-commit-failure:true")
-				.run((context) -> {
-					Neo4jTransactionManager transactionManager = context
-							.getBean(Neo4jTransactionManager.class);
-					assertThat(transactionManager.getDefaultTimeout()).isEqualTo(30);
-					assertThat(transactionManager.isRollbackOnCommitFailure()).isTrue();
-				});
+	void shouldFilterInitialEntityScanWithKnownAnnotations() {
+		this.contextRunner.withUserConfiguration(EntityScanConfig.class).run((context) -> {
+			Neo4jMappingContext mappingContext = context.getBean(Neo4jMappingContext.class);
+			assertThat(mappingContext.hasPersistentEntityFor(TestNode.class)).isTrue();
+			assertThat(mappingContext.hasPersistentEntityFor(TestPersistent.class)).isFalse();
+			assertThat(mappingContext.hasPersistentEntityFor(TestRelationshipProperties.class)).isTrue();
+			assertThat(mappingContext.hasPersistentEntityFor(TestNonAnnotated.class)).isFalse();
+		});
 	}
 
-	@Test
-	public void customSessionFactory() {
-		this.contextRunner.withUserConfiguration(CustomSessionFactory.class)
-				.run((context) -> {
-					assertThat(context)
-							.doesNotHaveBean(org.neo4j.ogm.config.Configuration.class);
-					assertThat(context).hasSingleBean(SessionFactory.class);
-				});
-	}
-
-	@Test
-	public void customConfiguration() {
-		this.contextRunner.withUserConfiguration(CustomConfiguration.class)
-				.run((context) -> {
-					assertThat(context.getBean(org.neo4j.ogm.config.Configuration.class))
-							.isSameAs(context.getBean("myConfiguration"));
-					assertThat(context).hasSingleBean(SessionFactory.class);
-					assertThat(context)
-							.hasSingleBean(org.neo4j.ogm.config.Configuration.class);
-				});
-
-	}
-
-	@Test
-	public void usesAutoConfigurationPackageToPickUpDomainTypes() {
-		AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
-		String cityPackage = City.class.getPackage().getName();
-		AutoConfigurationPackages.register(context, cityPackage);
-		context.register(Neo4jDataAutoConfiguration.class,
-				Neo4jRepositoriesAutoConfiguration.class);
-		try {
-			context.refresh();
-			assertDomainTypesDiscovered(context.getBean(Neo4jMappingContext.class),
-					City.class);
-		}
-		finally {
-			context.close();
-		}
-	}
-
-	@Test
-	public void openSessionInViewInterceptorCanBeDisabled() {
-		this.contextRunner.withPropertyValues("spring.data.neo4j.open-in-view:false")
-				.run((context) -> assertThat(context)
-						.doesNotHaveBean(OpenSessionInViewInterceptor.class));
-	}
-
-	@Test
-	public void eventListenersAreAutoRegistered() {
-		this.contextRunner.withUserConfiguration(EventListenerConfiguration.class)
-				.run((context) -> {
-					Session session = context.getBean(SessionFactory.class).openSession();
-					session.notifyListeners(
-							new PersistenceEvent(null, Event.TYPE.PRE_SAVE));
-					verify(context.getBean("eventListenerOne", EventListener.class))
-							.onPreSave(any(Event.class));
-					verify(context.getBean("eventListenerTwo", EventListener.class))
-							.onPreSave(any(Event.class));
-				});
-	}
-
-	private static void assertDomainTypesDiscovered(Neo4jMappingContext mappingContext,
-			Class<?>... types) {
-		for (Class<?> type : types) {
-			assertThat(mappingContext.getPersistentEntity(type)).isNotNull();
-		}
-	}
-
-	@Configuration
-	@EntityScan(basePackageClasses = Country.class)
-	static class TestConfiguration {
-
-	}
-
-	@Configuration
-	static class CustomSessionFactory {
+	@Configuration(proxyBeanMethods = false)
+	static class CustomDatabaseSelectionProviderConfiguration {
 
 		@Bean
-		public SessionFactory customSessionFactory() {
-			return mock(SessionFactory.class);
+		DatabaseSelectionProvider databaseSelectionProvider() {
+			return () -> DatabaseSelection.byName("custom");
 		}
 
 	}
 
-	@Configuration
-	static class CustomConfiguration {
-
-		@Bean
-		public org.neo4j.ogm.config.Configuration myConfiguration() {
-			return new org.neo4j.ogm.config.Configuration.Builder()
-					.uri("http://localhost:12345").build();
-		}
-
-	}
-
-	@Configuration
-	static class EventListenerConfiguration {
-
-		@Bean
-		public EventListener eventListenerOne() {
-			return mock(EventListener.class);
-		}
-
-		@Bean
-		public EventListener eventListenerTwo() {
-			return mock(EventListener.class);
-		}
+	@Configuration(proxyBeanMethods = false)
+	@TestAutoConfigurationPackage(TestPersistent.class)
+	static class EntityScanConfig {
 
 	}
 

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,6 +17,7 @@
 package org.springframework.boot.devtools.restart;
 
 import java.lang.Thread.UncaughtExceptionHandler;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Arrays;
 
 /**
@@ -35,7 +36,8 @@ class SilentExitExceptionHandler implements UncaughtExceptionHandler {
 
 	@Override
 	public void uncaughtException(Thread thread, Throwable exception) {
-		if (exception instanceof SilentExitException) {
+		if (exception instanceof SilentExitException || (exception instanceof InvocationTargetException
+				&& ((InvocationTargetException) exception).getTargetException() instanceof SilentExitException)) {
 			if (isJvmExiting(thread)) {
 				preventNonZeroExitCode();
 			}
@@ -78,7 +80,7 @@ class SilentExitExceptionHandler implements UncaughtExceptionHandler {
 		System.exit(0);
 	}
 
-	public static void setup(Thread thread) {
+	static void setup(Thread thread) {
 		UncaughtExceptionHandler handler = thread.getUncaughtExceptionHandler();
 		if (!(handler instanceof SilentExitExceptionHandler)) {
 			handler = new SilentExitExceptionHandler(handler);
@@ -86,7 +88,7 @@ class SilentExitExceptionHandler implements UncaughtExceptionHandler {
 		}
 	}
 
-	public static void exitCurrentThread() {
+	static void exitCurrentThread() {
 		throw new SilentExitException();
 	}
 

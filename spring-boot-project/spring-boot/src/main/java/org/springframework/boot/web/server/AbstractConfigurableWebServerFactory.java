@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,6 +19,7 @@ package org.springframework.boot.web.server;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -37,8 +38,7 @@ import org.springframework.util.Assert;
  * @author Brian Clozel
  * @since 2.0.0
  */
-public abstract class AbstractConfigurableWebServerFactory
-		implements ConfigurableWebServerFactory {
+public abstract class AbstractConfigurableWebServerFactory implements ConfigurableWebServerFactory {
 
 	private int port = 8080;
 
@@ -55,6 +55,8 @@ public abstract class AbstractConfigurableWebServerFactory
 	private Compression compression;
 
 	private String serverHeader;
+
+	private Shutdown shutdown = Shutdown.IMMEDIATE;
 
 	/**
 	 * Create a new {@link AbstractConfigurableWebServerFactory} instance.
@@ -163,24 +165,34 @@ public abstract class AbstractConfigurableWebServerFactory
 		this.serverHeader = serverHeader;
 	}
 
+	@Override
+	public void setShutdown(Shutdown shutdown) {
+		this.shutdown = shutdown;
+	}
+
+	/**
+	 * Returns the shutdown configuration that will be applied to the server.
+	 * @return the shutdown configuration
+	 * @since 2.3.0
+	 */
+	public Shutdown getShutdown() {
+		return this.shutdown;
+	}
+
 	/**
 	 * Return the absolute temp dir for given web server.
 	 * @param prefix server name
-	 * @return The temp dir for given server.
+	 * @return the temp dir for given server.
 	 */
 	protected final File createTempDir(String prefix) {
 		try {
-			File tempDir = File.createTempFile(prefix + ".", "." + getPort());
-			tempDir.delete();
-			tempDir.mkdir();
+			File tempDir = Files.createTempDirectory(prefix + "." + getPort() + ".").toFile();
 			tempDir.deleteOnExit();
 			return tempDir;
 		}
 		catch (IOException ex) {
 			throw new WebServerException(
-					"Unable to create tempDir. java.io.tmpdir is set to "
-							+ System.getProperty("java.io.tmpdir"),
-					ex);
+					"Unable to create tempDir. java.io.tmpdir is set to " + System.getProperty("java.io.tmpdir"), ex);
 		}
 	}
 

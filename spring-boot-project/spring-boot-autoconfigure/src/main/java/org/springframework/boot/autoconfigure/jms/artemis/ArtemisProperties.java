@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,8 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.activemq.artemis.core.remoting.impl.invm.TransportConstants;
 
-import org.springframework.boot.autoconfigure.jms.activemq.PooledConnectionFactoryProperties;
+import org.springframework.boot.autoconfigure.jms.JmsPoolConnectionFactoryProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 /**
@@ -32,6 +33,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
  *
  * @author Eddú Meléndez
  * @author Stephane Nicoll
+ * @author Justin Bertram
  * @since 1.3.0
  */
 @ConfigurationProperties(prefix = "spring.artemis")
@@ -43,9 +45,14 @@ public class ArtemisProperties {
 	private ArtemisMode mode;
 
 	/**
+	 * Artemis broker port.
+	 */
+	private String brokerUrl;
+
+	/**
 	 * Artemis broker host.
 	 */
-	private String host = "localhost";
+	private String host;
 
 	/**
 	 * Artemis broker port.
@@ -65,7 +72,7 @@ public class ArtemisProperties {
 	private final Embedded embedded = new Embedded();
 
 	@NestedConfigurationProperty
-	private final PooledConnectionFactoryProperties pool = new PooledConnectionFactoryProperties();
+	private final JmsPoolConnectionFactoryProperties pool = new JmsPoolConnectionFactoryProperties();
 
 	public ArtemisMode getMode() {
 		return this.mode;
@@ -75,18 +82,42 @@ public class ArtemisProperties {
 		this.mode = mode;
 	}
 
+	public String getBrokerUrl() {
+		return this.brokerUrl;
+	}
+
+	public void setBrokerUrl(String brokerUrl) {
+		this.brokerUrl = brokerUrl;
+	}
+
+	/**
+	 * Return the host of the broker.
+	 * @return the host
+	 * @deprecated as of 2.5.0 in favor of broker url
+	 */
+	@Deprecated
+	@DeprecatedConfigurationProperty(replacement = "spring.artemis.broker-url")
 	public String getHost() {
 		return this.host;
 	}
 
+	@Deprecated
 	public void setHost(String host) {
 		this.host = host;
 	}
 
+	/**
+	 * Return the port of the broker.
+	 * @return the port
+	 * @deprecated as of 2.5.0 in favor of broker url
+	 */
+	@Deprecated
+	@DeprecatedConfigurationProperty(replacement = "spring.artemis.broker-url")
 	public int getPort() {
 		return this.port;
 	}
 
+	@Deprecated
 	public void setPort(int port) {
 		this.port = port;
 	}
@@ -111,7 +142,7 @@ public class ArtemisProperties {
 		return this.embedded;
 	}
 
-	public PooledConnectionFactoryProperties getPool() {
+	public JmsPoolConnectionFactoryProperties getPool() {
 		return this.pool;
 	}
 

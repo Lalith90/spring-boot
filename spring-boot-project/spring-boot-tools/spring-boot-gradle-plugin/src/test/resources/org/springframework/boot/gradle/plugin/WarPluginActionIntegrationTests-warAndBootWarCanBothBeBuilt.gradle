@@ -1,14 +1,10 @@
-buildscript {
-	dependencies {
-		classpath files(pluginClasspath.split(','))
-	}
+plugins {
+	id 'war'
+	id 'org.springframework.boot' version '{version}'
 }
 
-apply plugin: 'org.springframework.boot'
-apply plugin: 'war'
-
 bootWar {
-	mainClassName = 'com.example.Application'
+	mainClass = 'com.example.Application'
 	classifier = 'boot'
 }
 

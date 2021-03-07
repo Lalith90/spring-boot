@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,7 +16,10 @@
 
 package org.springframework.boot.autoconfigure.jms;
 
+import java.time.Duration;
+
 import javax.jms.ConnectionFactory;
+import javax.jms.ExceptionListener;
 
 import org.springframework.jms.config.DefaultJmsListenerContainerFactory;
 import org.springframework.jms.support.converter.MessageConverter;
@@ -28,6 +31,7 @@ import org.springframework.util.Assert;
  * Configure {@link DefaultJmsListenerContainerFactory} with sensible defaults.
  *
  * @author Stephane Nicoll
+ * @author Eddú Meléndez
  * @since 1.3.3
  */
 public final class DefaultJmsListenerContainerFactoryConfigurer {
@@ -35,6 +39,8 @@ public final class DefaultJmsListenerContainerFactoryConfigurer {
 	private DestinationResolver destinationResolver;
 
 	private MessageConverter messageConverter;
+
+	private ExceptionListener exceptionListener;
 
 	private JtaTransactionManager transactionManager;
 
@@ -56,6 +62,15 @@ public final class DefaultJmsListenerContainerFactoryConfigurer {
 	 */
 	void setMessageConverter(MessageConverter messageConverter) {
 		this.messageConverter = messageConverter;
+	}
+
+	/**
+	 * Set the {@link ExceptionListener} to use or {@code null} if no exception listener
+	 * should be associated by default.
+	 * @param exceptionListener the {@link ExceptionListener}
+	 */
+	void setExceptionListener(ExceptionListener exceptionListener) {
+		this.exceptionListener = exceptionListener;
 	}
 
 	/**
@@ -81,8 +96,7 @@ public final class DefaultJmsListenerContainerFactoryConfigurer {
 	 * @param factory the {@link DefaultJmsListenerContainerFactory} instance to configure
 	 * @param connectionFactory the {@link ConnectionFactory} to use
 	 */
-	public void configure(DefaultJmsListenerContainerFactory factory,
-			ConnectionFactory connectionFactory) {
+	public void configure(DefaultJmsListenerContainerFactory factory, ConnectionFactory connectionFactory) {
 		Assert.notNull(factory, "Factory must not be null");
 		Assert.notNull(connectionFactory, "ConnectionFactory must not be null");
 		factory.setConnectionFactory(connectionFactory);
@@ -99,6 +113,9 @@ public final class DefaultJmsListenerContainerFactoryConfigurer {
 		if (this.messageConverter != null) {
 			factory.setMessageConverter(this.messageConverter);
 		}
+		if (this.exceptionListener != null) {
+			factory.setExceptionListener(this.exceptionListener);
+		}
 		JmsProperties.Listener listener = this.jmsProperties.getListener();
 		factory.setAutoStartup(listener.isAutoStartup());
 		if (listener.getAcknowledgeMode() != null) {
@@ -107,6 +124,10 @@ public final class DefaultJmsListenerContainerFactoryConfigurer {
 		String concurrency = listener.formatConcurrency();
 		if (concurrency != null) {
 			factory.setConcurrency(concurrency);
+		}
+		Duration receiveTimeout = listener.getReceiveTimeout();
+		if (receiveTimeout != null) {
+			factory.setReceiveTimeout(receiveTimeout.toMillis());
 		}
 	}
 

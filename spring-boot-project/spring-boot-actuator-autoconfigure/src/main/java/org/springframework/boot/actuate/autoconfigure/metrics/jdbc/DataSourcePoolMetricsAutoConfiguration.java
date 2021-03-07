@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2021 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,16 +18,20 @@ package org.springframework.boot.actuate.autoconfigure.metrics.jdbc;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import javax.sql.DataSource;
 
+import com.zaxxer.hikari.HikariConfigMXBean;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.metrics.micrometer.MicrometerMetricsTrackerFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.actuate.autoconfigure.metrics.MetricsAutoConfiguration;
 import org.springframework.boot.actuate.autoconfigure.metrics.export.simple.SimpleMetricsExportAutoConfiguration;
@@ -37,8 +41,10 @@ import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.jdbc.DataSourceUnwrapper;
 import org.springframework.boot.jdbc.metadata.DataSourcePoolMetadataProvider;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.log.LogMessage;
 import org.springframework.util.StringUtils;
 
 /**
@@ -48,38 +54,33 @@ import org.springframework.util.StringUtils;
  * @author Stephane Nicoll
  * @since 2.0.0
  */
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @AutoConfigureAfter({ MetricsAutoConfiguration.class, DataSourceAutoConfiguration.class,
 		SimpleMetricsExportAutoConfiguration.class })
 @ConditionalOnClass({ DataSource.class, MeterRegistry.class })
 @ConditionalOnBean({ DataSource.class, MeterRegistry.class })
 public class DataSourcePoolMetricsAutoConfiguration {
 
-	@Configuration
+	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnBean(DataSourcePoolMetadataProvider.class)
 	static class DataSourcePoolMetadataMetricsConfiguration {
 
 		private static final String DATASOURCE_SUFFIX = "dataSource";
 
-		private final MeterRegistry registry;
-
-		private final Collection<DataSourcePoolMetadataProvider> metadataProviders;
-
-		DataSourcePoolMetadataMetricsConfiguration(MeterRegistry registry,
-				Collection<DataSourcePoolMetadataProvider> metadataProviders) {
-			this.registry = registry;
-			this.metadataProviders = metadataProviders;
-		}
-
 		@Autowired
-		public void bindDataSourcesToRegistry(Map<String, DataSource> dataSources) {
-			dataSources.forEach(this::bindDataSourceToRegistry);
+		void bindDataSourcesToRegistry(Map<String, DataSource> dataSources, MeterRegistry registry,
+				ObjectProvider<DataSourcePoolMetadataProvider> metadataProviders) {
+			List<DataSourcePoolMetadataProvider> metadataProvidersList = metadataProviders.stream()
+					.collect(Collectors.toList());
+			dataSources.forEach(
+					(name, dataSource) -> bindDataSourceToRegistry(name, dataSource, metadataProvidersList, registry));
 		}
 
-		private void bindDataSourceToRegistry(String beanName, DataSource dataSource) {
+		private void bindDataSourceToRegistry(String beanName, DataSource dataSource,
+				Collection<DataSourcePoolMetadataProvider> metadataProviders, MeterRegistry registry) {
 			String dataSourceName = getDataSourceName(beanName);
-			new DataSourcePoolMetrics(dataSource, this.metadataProviders, dataSourceName,
-					Collections.emptyList()).bindTo(this.registry);
+			new DataSourcePoolMetrics(dataSource, metadataProviders, dataSourceName, Collections.emptyList())
+					.bindTo(registry);
 		}
 
 		/**
@@ -90,20 +91,18 @@ public class DataSourcePoolMetricsAutoConfiguration {
 		private String getDataSourceName(String beanName) {
 			if (beanName.length() > DATASOURCE_SUFFIX.length()
 					&& StringUtils.endsWithIgnoreCase(beanName, DATASOURCE_SUFFIX)) {
-				return beanName.substring(0,
-						beanName.length() - DATASOURCE_SUFFIX.length());
+				return beanName.substring(0, beanName.length() - DATASOURCE_SUFFIX.length());
 			}
 			return beanName;
 		}
 
 	}
 
-	@Configuration
+	@Configuration(proxyBeanMethods = false)
 	@ConditionalOnClass(HikariDataSource.class)
 	static class HikariDataSourceMetricsConfiguration {
 
-		private static final Log logger = LogFactory
-				.getLog(HikariDataSourceMetricsConfiguration.class);
+		private static final Log logger = LogFactory.getLog(HikariDataSourceMetricsConfiguration.class);
 
 		private final MeterRegistry registry;
 
@@ -112,22 +111,23 @@ public class DataSourcePoolMetricsAutoConfiguration {
 		}
 
 		@Autowired
-		public void bindMetricsRegistryToHikariDataSources(
-				Collection<DataSource> dataSources) {
-			dataSources.stream().filter(HikariDataSource.class::isInstance)
-					.map(HikariDataSource.class::cast)
-					.forEach(this::bindMetricsRegistryToHikariDataSource);
+		void bindMetricsRegistryToHikariDataSources(Collection<DataSource> dataSources) {
+			for (DataSource dataSource : dataSources) {
+				HikariDataSource hikariDataSource = DataSourceUnwrapper.unwrap(dataSource, HikariConfigMXBean.class,
+						HikariDataSource.class);
+				if (hikariDataSource != null) {
+					bindMetricsRegistryToHikariDataSource(hikariDataSource);
+				}
+			}
 		}
 
 		private void bindMetricsRegistryToHikariDataSource(HikariDataSource hikari) {
-			if (hikari.getMetricRegistry() == null
-					&& hikari.getMetricsTrackerFactory() == null) {
+			if (hikari.getMetricRegistry() == null && hikari.getMetricsTrackerFactory() == null) {
 				try {
-					hikari.setMetricsTrackerFactory(
-							new MicrometerMetricsTrackerFactory(this.registry));
+					hikari.setMetricsTrackerFactory(new MicrometerMetricsTrackerFactory(this.registry));
 				}
 				catch (Exception ex) {
-					logger.warn("Failed to bind Hikari metrics: " + ex.getMessage());
+					logger.warn(LogMessage.format("Failed to bind Hikari metrics: %s", ex.getMessage()));
 				}
 			}
 		}

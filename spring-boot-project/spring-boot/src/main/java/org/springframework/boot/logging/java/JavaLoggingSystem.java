@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,7 @@ import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.logging.Level;
@@ -33,7 +34,11 @@ import org.springframework.boot.logging.LogLevel;
 import org.springframework.boot.logging.LoggerConfiguration;
 import org.springframework.boot.logging.LoggingInitializationContext;
 import org.springframework.boot.logging.LoggingSystem;
+import org.springframework.boot.logging.LoggingSystemFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.util.Assert;
+import org.springframework.util.ClassUtils;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.util.ResourceUtils;
 import org.springframework.util.StringUtils;
@@ -45,6 +50,7 @@ import org.springframework.util.StringUtils;
  * @author Dave Syer
  * @author Andy Wilkinson
  * @author Ben Hale
+ * @since 1.0.0
  */
 public class JavaLoggingSystem extends AbstractLoggingSystem {
 
@@ -59,6 +65,8 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 		LEVELS.map(LogLevel.FATAL, Level.SEVERE);
 		LEVELS.map(LogLevel.OFF, Level.OFF);
 	}
+
+	private final Set<Logger> configuredLoggers = Collections.synchronizedSet(new HashSet<>());
 
 	public JavaLoggingSystem(ClassLoader classLoader) {
 		super(classLoader);
@@ -76,8 +84,7 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 	}
 
 	@Override
-	protected void loadDefaults(LoggingInitializationContext initializationContext,
-			LogFile logFile) {
+	protected void loadDefaults(LoggingInitializationContext initializationContext, LogFile logFile) {
 		if (logFile != null) {
 			loadConfiguration(getPackagedConfigFile("logging-file.properties"), logFile);
 		}
@@ -87,26 +94,23 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 	}
 
 	@Override
-	protected void loadConfiguration(LoggingInitializationContext initializationContext,
-			String location, LogFile logFile) {
+	protected void loadConfiguration(LoggingInitializationContext initializationContext, String location,
+			LogFile logFile) {
 		loadConfiguration(location, logFile);
 	}
 
 	protected void loadConfiguration(String location, LogFile logFile) {
 		Assert.notNull(location, "Location must not be null");
 		try {
-			String configuration = FileCopyUtils.copyToString(
-					new InputStreamReader(ResourceUtils.getURL(location).openStream()));
+			String configuration = FileCopyUtils
+					.copyToString(new InputStreamReader(ResourceUtils.getURL(location).openStream()));
 			if (logFile != null) {
-				configuration = configuration.replace("${LOG_FILE}",
-						StringUtils.cleanPath(logFile.toString()));
+				configuration = configuration.replace("${LOG_FILE}", StringUtils.cleanPath(logFile.toString()));
 			}
-			LogManager.getLogManager().readConfiguration(
-					new ByteArrayInputStream(configuration.getBytes()));
+			LogManager.getLogManager().readConfiguration(new ByteArrayInputStream(configuration.getBytes()));
 		}
 		catch (Exception ex) {
-			throw new IllegalStateException(
-					"Could not initialize Java logging from " + location, ex);
+			throw new IllegalStateException("Could not initialize Java logging from " + location, ex);
 		}
 	}
 
@@ -122,6 +126,7 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 		}
 		Logger logger = Logger.getLogger(loggerName);
 		if (logger != null) {
+			this.configuredLoggers.add(logger);
 			logger.setLevel(LEVELS.convertSystemToNative(level));
 		}
 	}
@@ -145,8 +150,7 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 		}
 		LogLevel level = LEVELS.convertNativeToSystem(logger.getLevel());
 		LogLevel effectiveLevel = LEVELS.convertNativeToSystem(getEffectiveLevel(logger));
-		String name = (StringUtils.hasLength(logger.getName()) ? logger.getName()
-				: ROOT_LOGGER_NAME);
+		String name = (StringUtils.hasLength(logger.getName()) ? logger.getName() : ROOT_LOGGER_NAME);
 		return new LoggerConfiguration(name, level, effectiveLevel);
 	}
 
@@ -163,11 +167,35 @@ public class JavaLoggingSystem extends AbstractLoggingSystem {
 		return new ShutdownHandler();
 	}
 
-	private final class ShutdownHandler implements Runnable {
+	@Override
+	public void cleanUp() {
+		this.configuredLoggers.clear();
+	}
+
+	private static final class ShutdownHandler implements Runnable {
 
 		@Override
 		public void run() {
 			LogManager.getLogManager().reset();
+		}
+
+	}
+
+	/**
+	 * {@link LoggingSystemFactory} that returns {@link JavaLoggingSystem} if possible.
+	 */
+	@Order(Ordered.LOWEST_PRECEDENCE)
+	public static class Factory implements LoggingSystemFactory {
+
+		private static final boolean PRESENT = ClassUtils.isPresent("java.util.logging.LogManager",
+				Factory.class.getClassLoader());
+
+		@Override
+		public LoggingSystem getLoggingSystem(ClassLoader classLoader) {
+			if (PRESENT) {
+				return new JavaLoggingSystem(classLoader);
+			}
+			return null;
 		}
 
 	}

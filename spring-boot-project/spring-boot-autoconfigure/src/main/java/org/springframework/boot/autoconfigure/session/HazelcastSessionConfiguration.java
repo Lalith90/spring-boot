@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -24,11 +24,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.session.SessionRepository;
-import org.springframework.session.hazelcast.HazelcastSessionRepository;
+import org.springframework.session.hazelcast.HazelcastIndexedSessionRepository;
 import org.springframework.session.hazelcast.config.annotation.web.http.HazelcastHttpSessionConfiguration;
 
 /**
@@ -39,27 +40,28 @@ import org.springframework.session.hazelcast.config.annotation.web.http.Hazelcas
  * @author Stephane Nicoll
  * @author Vedran Pavic
  */
-@Configuration
-@ConditionalOnClass(HazelcastSessionRepository.class)
+@Configuration(proxyBeanMethods = false)
+@ConditionalOnClass(HazelcastIndexedSessionRepository.class)
 @ConditionalOnMissingBean(SessionRepository.class)
 @ConditionalOnBean(HazelcastInstance.class)
 @Conditional(ServletSessionCondition.class)
 @EnableConfigurationProperties(HazelcastSessionProperties.class)
 class HazelcastSessionConfiguration {
 
-	@Configuration
-	public static class SpringBootHazelcastHttpSessionConfiguration
-			extends HazelcastHttpSessionConfiguration {
+	@Configuration(proxyBeanMethods = false)
+	public static class SpringBootHazelcastHttpSessionConfiguration extends HazelcastHttpSessionConfiguration {
 
 		@Autowired
 		public void customize(SessionProperties sessionProperties,
-				HazelcastSessionProperties hazelcastSessionProperties) {
-			Duration timeout = sessionProperties.getTimeout();
+				HazelcastSessionProperties hazelcastSessionProperties, ServerProperties serverProperties) {
+			Duration timeout = sessionProperties
+					.determineTimeout(() -> serverProperties.getServlet().getSession().getTimeout());
 			if (timeout != null) {
 				setMaxInactiveIntervalInSeconds((int) timeout.getSeconds());
 			}
 			setSessionMapName(hazelcastSessionProperties.getMapName());
-			setHazelcastFlushMode(hazelcastSessionProperties.getFlushMode());
+			setFlushMode(hazelcastSessionProperties.getFlushMode());
+			setSaveMode(hazelcastSessionProperties.getSaveMode());
 		}
 
 	}

@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2018 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -31,6 +31,7 @@ import org.springframework.core.env.PropertySource;
  * @see OriginTrackedValue
  * @see #getConfigurationProperty(ConfigurationPropertyName)
  */
+@FunctionalInterface
 public interface ConfigurationPropertySource {
 
 	/**
@@ -50,8 +51,7 @@ public interface ConfigurationPropertySource {
 	 * @param name the name to check
 	 * @return if the source contains any descendants
 	 */
-	default ConfigurationPropertyState containsDescendantOf(
-			ConfigurationPropertyName name) {
+	default ConfigurationPropertyState containsDescendantOf(ConfigurationPropertyName name) {
 		return ConfigurationPropertyState.UNKNOWN;
 	}
 
@@ -61,8 +61,7 @@ public interface ConfigurationPropertySource {
 	 * @param filter the filter to match
 	 * @return a filtered {@link ConfigurationPropertySource} instance
 	 */
-	default ConfigurationPropertySource filter(
-			Predicate<ConfigurationPropertyName> filter) {
+	default ConfigurationPropertySource filter(Predicate<ConfigurationPropertyName> filter) {
 		return new FilteredConfigurationPropertiesSource(this, filter);
 	}
 
@@ -71,15 +70,39 @@ public interface ConfigurationPropertySource {
 	 * @param aliases a function that returns a stream of aliases for any given name
 	 * @return a {@link ConfigurationPropertySource} instance supporting name aliases
 	 */
-	default ConfigurationPropertySource withAliases(
-			ConfigurationPropertyNameAliases aliases) {
+	default ConfigurationPropertySource withAliases(ConfigurationPropertyNameAliases aliases) {
 		return new AliasedConfigurationPropertySource(this, aliases);
 	}
 
 	/**
-	 * Return the underlying {@link PropertySource}.
-	 * @return the underlying property source.
+	 * Return a variant of this source that supports a prefix.
+	 * @param prefix the prefix for properties in the source
+	 * @return a {@link ConfigurationPropertySource} instance supporting a prefix
 	 */
-	Object getUnderlyingSource();
+	default ConfigurationPropertySource withPrefix(String prefix) {
+		return new PrefixedConfigurationPropertySource(this, prefix);
+	}
+
+	/**
+	 * Return the underlying source that is actually providing the properties.
+	 * @return the underlying property source or {@code null}.
+	 */
+	default Object getUnderlyingSource() {
+		return null;
+	}
+
+	/**
+	 * Return a single new {@link ConfigurationPropertySource} adapted from the given
+	 * Spring {@link PropertySource} or {@code null} if the source cannot be adapted.
+	 * @param source the Spring property source to adapt
+	 * @return an adapted source or {@code null} {@link SpringConfigurationPropertySource}
+	 * @since 2.4.0
+	 */
+	static ConfigurationPropertySource from(PropertySource<?> source) {
+		if (source instanceof ConfigurationPropertySourcesPropertySource) {
+			return null;
+		}
+		return SpringConfigurationPropertySource.from(source);
+	}
 
 }

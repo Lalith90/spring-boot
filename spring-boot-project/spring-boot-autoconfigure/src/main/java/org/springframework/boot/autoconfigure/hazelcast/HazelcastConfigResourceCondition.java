@@ -1,11 +1,11 @@
 /*
- * Copyright 2012-2017 the original author or authors.
+ * Copyright 2012-2020 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -35,21 +35,21 @@ import org.springframework.util.Assert;
  */
 public abstract class HazelcastConfigResourceCondition extends ResourceCondition {
 
+	protected static final String HAZELCAST_CONFIG_PROPERTY = "spring.hazelcast.config";
+
 	private final String configSystemProperty;
 
-	protected HazelcastConfigResourceCondition(String configSystemProperty,
-			String... resourceLocations) {
-		super("Hazelcast", "spring.hazelcast.config", resourceLocations);
+	protected HazelcastConfigResourceCondition(String configSystemProperty, String... resourceLocations) {
+		super("Hazelcast", HAZELCAST_CONFIG_PROPERTY, resourceLocations);
 		Assert.notNull(configSystemProperty, "ConfigSystemProperty must not be null");
 		this.configSystemProperty = configSystemProperty;
 	}
 
 	@Override
-	protected ConditionOutcome getResourceOutcome(ConditionContext context,
-			AnnotatedTypeMetadata metadata) {
+	protected ConditionOutcome getResourceOutcome(ConditionContext context, AnnotatedTypeMetadata metadata) {
 		if (System.getProperty(this.configSystemProperty) != null) {
-			return ConditionOutcome.match(startConditionMessage().because(
-					"System property '" + this.configSystemProperty + "' is set."));
+			return ConditionOutcome.match(
+					startConditionMessage().because("System property '" + this.configSystemProperty + "' is set."));
 		}
 		return super.getResourceOutcome(context, metadata);
 	}
